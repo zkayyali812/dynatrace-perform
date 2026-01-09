@@ -1,0 +1,357 @@
+---
+# =============================================================================
+# Configure Ansible Automation Platform
+# =============================================================================
+# Deploys all AAP Controller and EDA Controller configuration from code
+# Uses ansible.controller and ansible.eda collections
+# =============================================================================
+
+# =============================================================================
+# Play 1: Configure AAP Controller
+# =============================================================================
+- name: Configure Ansible Automation Platform Controller
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - ../../group_vars/all.yml
+
+  module_defaults:
+    group/ansible.controller.controller:
+      controller_host: "{{ controller_hostname }}"
+      controller_username: "{{ controller_username }}"
+      controller_password: "{{ controller_password }}"
+      validate_certs: "{{ controller_validate_certs }}"
+
+  pre_tasks:
+    - name: Display Controller configuration summary
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          AAP CONTROLLER CONFIGURATION
+          ============================================
+          Controller: {{ controller_hostname }}
+          Organization: {{ organization_name }}
+          Project: {{ project_name }}
+          ============================================
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # Organizations
+    # -------------------------------------------------------------------------
+    - name: Load organization configuration
+      ansible.builtin.include_vars:
+        file: ../../controller_config/organizations.yml
+
+    - name: Create organizations
+      ansible.controller.organization:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        state: present
+      loop: "{{ controller_organizations }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # -------------------------------------------------------------------------
+    # Labels
+    # -------------------------------------------------------------------------
+    - name: Load labels configuration
+      ansible.builtin.include_vars:
+        file: ../../controller_config/labels/labels.yml
+
+    - name: Create labels
+      ansible.controller.label:
+        name: "{{ item.name }}"
+        organization: "{{ item.organization }}"
+        state: present
+      loop: "{{ controller_labels }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # -------------------------------------------------------------------------
+    # Credential Types
+    # -------------------------------------------------------------------------
+    - name: Load credential types configuration
+      ansible.builtin.include_vars:
+        file: ../../controller_config/credentials/credential_types.yml
+
+    - name: Create credential types
+      ansible.controller.credential_type:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        kind: cloud
+        inputs: "{{ item.inputs }}"
+        injectors: "{{ item.injectors }}"
+        state: present
+      loop: "{{ controller_credential_types }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: controller_credential_types | length > 0
+
+    # -------------------------------------------------------------------------
+    # Credentials
+    # -------------------------------------------------------------------------
+    - name: Load credentials configuration
+      ansible.builtin.include_vars:
+        file: ../../controller_config/credentials/openshift_credentials.yml
+
+    - name: Create credentials
+      ansible.controller.credential:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        organization: "{{ item.organization }}"
+        credential_type: "{{ item.credential_type }}"
+        inputs: "{{ item.inputs }}"
+        state: present
+      loop: "{{ controller_credentials }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # -------------------------------------------------------------------------
+    # Inventories
+    # -------------------------------------------------------------------------
+    - name: Load inventories configuration
+      ansible.builtin.include_vars:
+        file: ../../controller_config/inventories/inventories.yml
+
+    - name: Create inventories
+      ansible.controller.inventory:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        organization: "{{ item.organization }}"
+        variables: "{{ item.variables | default(omit) }}"
+        state: present
+      loop: "{{ controller_inventories }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Load hosts configuration
+      ansible.builtin.include_vars:
+        file: ../../controller_config/inventories/hosts.yml
+
+    - name: Create hosts
+      ansible.controller.host:
+        name: "{{ item.name }}"
+        inventory: "{{ item.inventory }}"
+        variables: "{{ item.variables | default(omit) }}"
+        state: present
+      loop: "{{ controller_hosts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # -------------------------------------------------------------------------
+    # Projects
+    # -------------------------------------------------------------------------
+    - name: Load projects configuration
+      ansible.builtin.include_vars:
+        file: ../../controller_config/projects/projects.yml
+
+    - name: Create projects
+      ansible.controller.project:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        organization: "{{ item.organization }}"
+        scm_type: "{{ item.scm_type }}"
+        scm_url: "{{ item.scm_url }}"
+        scm_branch: "{{ item.scm_branch | default('main') }}"
+        scm_clean: "{{ item.scm_clean | default(true) }}"
+        scm_update_on_launch: "{{ item.scm_update_on_launch | default(true) }}"
+        credential: "{{ item.credential | default(omit) }}"
+        default_environment: "{{ item.default_environment | default(omit) }}"
+        state: present
+        wait: true
+      loop: "{{ controller_projects }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # -------------------------------------------------------------------------
+    # Job Templates
+    # -------------------------------------------------------------------------
+    - name: Load job templates configuration
+      ansible.builtin.include_vars:
+        file: ../../controller_config/job_templates/job_templates.yml
+
+    - name: Create job templates
+      ansible.controller.job_template:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        organization: "{{ item.organization }}"
+        project: "{{ item.project }}"
+        playbook: "{{ item.playbook }}"
+        inventory: "{{ item.inventory }}"
+        credentials: "{{ item.credentials | default(omit) }}"
+        execution_environment: "{{ item.execution_environment | default(omit) }}"
+        ask_variables_on_launch: "{{ item.ask_variables_on_launch | default(false) }}"
+        ask_labels_on_launch: "{{ item.ask_labels_on_launch | default(false) }}"
+        extra_vars: "{{ item.extra_vars | default(omit) }}"
+        state: present
+      loop: "{{ controller_templates }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+  post_tasks:
+    - name: Controller configuration complete
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          AAP CONTROLLER CONFIGURATION COMPLETE
+          ============================================
+
+# =============================================================================
+# Play 2: Configure EDA Controller
+# =============================================================================
+- name: Configure Event-Driven Ansible Controller
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - ../../group_vars/all.yml
+
+  module_defaults:
+    group/ansible.eda.eda:
+      controller_host: "{{ eda_controller_hostname }}"
+      controller_username: "{{ eda_controller_username }}"
+      controller_password: "{{ eda_controller_password }}"
+      validate_certs: "{{ eda_controller_validate_certs }}"
+
+  pre_tasks:
+    - name: Display EDA configuration summary
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          EDA CONTROLLER CONFIGURATION
+          ============================================
+          EDA Controller: {{ eda_controller_hostname }}
+          Organization: {{ organization_name }}
+          Project: {{ project_name }}
+          Event Stream: {{ event_stream_name }}
+          ============================================
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # Decision Environments
+    # -------------------------------------------------------------------------
+    - name: Load decision environments configuration
+      ansible.builtin.include_vars:
+        file: ../../eda_config/decision_environments/decision_environments.yml
+
+    - name: Create decision environments
+      ansible.eda.decision_environment:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        image_url: "{{ item.image_url }}"
+        organization_name: "{{ item.organization }}"
+        state: present
+      loop: "{{ eda_decision_environments }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # -------------------------------------------------------------------------
+    # Credentials
+    # -------------------------------------------------------------------------
+    - name: Load EDA credentials configuration
+      ansible.builtin.include_vars:
+        file: ../../eda_config/credentials/eda_credentials.yml
+
+    - name: Create EDA credentials
+      ansible.eda.credential:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        credential_type_name: "{{ item.credential_type }}"
+        inputs: "{{ item.inputs }}"
+        organization_name: "{{ item.organization }}"
+        state: present
+      loop: "{{ eda_credentials }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # -------------------------------------------------------------------------
+    # Projects
+    # -------------------------------------------------------------------------
+    - name: Load EDA projects configuration
+      ansible.builtin.include_vars:
+        file: ../../eda_config/projects/eda_projects.yml
+
+    - name: Create EDA projects
+      ansible.eda.project:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        url: "{{ item.url }}"
+        scm_branch: "{{ item.scm_branch | default('main') }}"
+        credential: "{{ item.credential | default(omit) }}"
+        organization_name: "{{ item.organization }}"
+        state: present
+      loop: "{{ eda_projects }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # -------------------------------------------------------------------------
+    # Event Streams (AAP 2.5+)
+    # -------------------------------------------------------------------------
+    - name: Load event streams configuration
+      ansible.builtin.include_vars:
+        file: ../../eda_config/event_streams/event_streams.yml
+
+    - name: Create event streams
+      ansible.eda.event_stream:
+        name: "{{ item.name }}"
+        organization_name: "{{ item.organization }}"
+        event_stream_type: "{{ item.event_stream_type }}"
+        credential_name: "{{ item.credential_name }}"
+        forward_events: "{{ item.forward_events | default(true) }}"
+        state: present
+      loop: "{{ eda_event_streams }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # -------------------------------------------------------------------------
+    # Rulebook Activations
+    # -------------------------------------------------------------------------
+    - name: Load rulebook activations configuration
+      ansible.builtin.include_vars:
+        file: ../../eda_config/rulebook_activations/rulebook_activations.yml
+
+    - name: Create rulebook activations
+      ansible.eda.rulebook_activation:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        project_name: "{{ item.project_name }}"
+        rulebook_name: "{{ item.rulebook_name }}"
+        decision_environment_name: "{{ item.decision_environment_name }}"
+        organization_name: "{{ item.organization_name }}"
+        event_streams: "{{ item.event_streams | default(omit) }}"
+        eda_credentials: "{{ item.eda_credentials | default(omit) }}"
+        restart_policy: "{{ item.restart_policy | default('on-failure') }}"
+        state: "{{ item.state | default('enabled') }}"
+      loop: "{{ eda_rulebook_activations }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+  post_tasks:
+    - name: Configuration complete
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          AAP CONFIGURATION COMPLETE
+          ============================================
+          All Controller and EDA resources configured.
+
+          NEXT STEPS:
+          1. Get the Event Stream webhook URL from EDA Controller UI
+          2. Configure Dynatrace Problem Notifications with the webhook URL
+          3. Test with the webhook simulator: ./demo/scripts/send_problem.sh
+
+          Event Stream: {{ event_stream_name }}
+          ============================================
+
+    - name: Get event stream details
+      ansible.builtin.debug:
+        msg: |
+          To get your Event Stream webhook URL:
+          1. Navigate to EDA Controller UI
+          2. Go to Event Streams
+          3. Click on '{{ event_stream_name }}'
+          4. Copy the webhook URL
+          5. Configure this URL in Dynatrace Problem Notifications

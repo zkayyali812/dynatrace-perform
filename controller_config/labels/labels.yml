@@ -1,0 +1,12 @@
+---
+# Labels for AAP Controller
+# These labels are used to tag jobs triggered by EDA for easy filtering
+controller_labels:
+  - name: "dynatrace"
+    organization: "{{ organization_name }}"
+
+  - name: "remediation"
+    organization: "{{ organization_name }}"
+
+  - name: "eda-triggered"
+    organization: "{{ organization_name }}"

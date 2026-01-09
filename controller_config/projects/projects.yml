@@ -1,0 +1,13 @@
+---
+# Projects for AAP Controller
+controller_projects:
+  - name: "{{ project_name }}"
+    description: "Event-Driven Ansible remediation playbooks for Dynatrace problems"
+    organization: "{{ organization_name }}"
+    scm_type: git
+    scm_url: "{{ project_scm_url }}"
+    scm_branch: "{{ project_scm_branch }}"
+    scm_clean: true
+    scm_delete_on_update: false
+    scm_update_on_launch: true
+    credential: "GitHub PAT"

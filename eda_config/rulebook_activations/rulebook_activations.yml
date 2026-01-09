@@ -1,0 +1,56 @@
+---
+# =============================================================================
+# Rulebook Activations for EDA Controller
+# =============================================================================
+# Two options are available:
+# 1. dynatrace_problem_handler.yml - Triggers job templates (no closed-loop)
+# 2. dynatrace_closed_loop.yml - Triggers job templates with close_problem=true (full closed-loop)
+#
+# Only enable ONE rulebook activation at a time.
+# =============================================================================
+
+eda_rulebook_activations:
+  # ---------------------------------------------------------------------------
+  # Option 1: Job Templates Only (Simple Demo)
+  # ---------------------------------------------------------------------------
+  # Use this for demos where you just want to show remediation without
+  # closing the problem in Dynatrace.
+  - name: "Dynatrace Problem Handler"
+    description: "Processes Dynatrace problem notifications and triggers remediation"
+    project_name: "{{ project_name }}"
+    rulebook_name: "dynatrace_problem_handler.yml"
+    decision_environment_name: "{{ decision_environment_name }}"
+    organization_name: "{{ organization_name }}"
+    # Link to Event Stream for receiving webhooks
+    event_streams:
+      - event_stream: "{{ event_stream_name }}"
+        source_name: "dynatrace_events"
+    # Credential for triggering AAP Controller jobs
+    eda_credentials:
+      - "AAP Controller Credential"
+    # Activation settings
+    state: "enabled"
+    restart_policy: "on-failure"
+
+  # ---------------------------------------------------------------------------
+  # Option 2: Closed-Loop Workflows (Full E2E Demo)
+  # ---------------------------------------------------------------------------
+  # Use this for demos showing full closed-loop automation where
+  # Dynatrace problems are closed after successful remediation.
+  # NOTE: Disable the handler above before enabling this one!
+  - name: "Dynatrace Closed-Loop Handler"
+    description: "Full closed-loop: remediate and close problems in Dynatrace"
+    project_name: "{{ project_name }}"
+    rulebook_name: "dynatrace_closed_loop.yml"
+    decision_environment_name: "{{ decision_environment_name }}"
+    organization_name: "{{ organization_name }}"
+    # Link to Event Stream for receiving webhooks
+    event_streams:
+      - event_stream: "{{ event_stream_name }}"
+        source_name: "dynatrace_events"
+    # Credential for triggering AAP Controller jobs
+    eda_credentials:
+      - "AAP Controller Credential"
+    # Activation settings - DISABLED by default
+    state: "disabled"
+    restart_policy: "on-failure"

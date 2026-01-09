@@ -1,0 +1,9 @@
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: dynatrace-operator-group
+  namespace: dynatrace
+spec:
+  targetNamespaces:
+    - dynatrace

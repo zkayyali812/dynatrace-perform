@@ -1,0 +1,10 @@
+---
+# Inventories for AAP Controller
+controller_inventories:
+  - name: "OpenShift Cluster"
+    description: "Inventory for OpenShift/Kubernetes remediation targets"
+    organization: "{{ organization_name }}"
+
+  - name: "Localhost"
+    description: "Localhost inventory for API-based remediation"
+    organization: "{{ organization_name }}"

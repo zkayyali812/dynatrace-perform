@@ -1,0 +1,60 @@
+---
+# =============================================================================
+# Dynatrace Perform Demo - Configuration Variables
+# =============================================================================
+# Copy this file to all.yml and update with your environment values
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# AAP Gateway Configuration (AAP 2.5+)
+# -----------------------------------------------------------------------------
+# Single gateway URL for both Controller and EDA access
+gateway_hostname: "http://localhost"
+gateway_username: "admin"
+gateway_password: "{{ lookup('env', 'AAP_PASSWORD') }}"
+gateway_validate_certs: false
+
+# Derived hostnames (used by collections)
+controller_hostname: "{{ gateway_hostname }}"
+controller_username: "{{ gateway_username }}"
+controller_password: "{{ gateway_password }}"
+controller_validate_certs: "{{ gateway_validate_certs }}"
+
+eda_controller_hostname: "{{ gateway_hostname }}"
+eda_controller_username: "{{ gateway_username }}"
+eda_controller_password: "{{ gateway_password }}"
+eda_controller_validate_certs: "{{ gateway_validate_certs }}"
+
+# -----------------------------------------------------------------------------
+# OpenShift Configuration
+# -----------------------------------------------------------------------------
+openshift_api_url: "https://api.cluster.example.com:6443"
+openshift_api_token: "{{ lookup('env', 'OPENSHIFT_TOKEN') }}"
+openshift_validate_certs: false
+
+# Target namespace for remediation
+target_namespace: "demo-app"
+
+# -----------------------------------------------------------------------------
+# Dynatrace Configuration (for real integration)
+# -----------------------------------------------------------------------------
+dynatrace_environment_url: "https://abc12345.live.dynatrace.com"
+dynatrace_api_token: "{{ lookup('env', 'DYNATRACE_API_TOKEN') }}"
+
+# -----------------------------------------------------------------------------
+# Demo Configuration
+# -----------------------------------------------------------------------------
+# Organization name for AAP resources
+organization_name: "Dynatrace Demo"
+
+# Project configuration
+project_name: "Dynatrace EDA Remediation"
+project_scm_url: "https://github.com/zkayyali812/dynatrace-perform.git"
+project_scm_branch: "main"
+
+# Decision Environment for EDA
+decision_environment_name: "Dynatrace EDA DE"
+decision_environment_image: "quay.io/ansible/ansible-rulebook:latest"
+
+# Event Stream name (AAP 2.5+)
+event_stream_name: "dynatrace-problems"

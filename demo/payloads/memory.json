@@ -1,0 +1,34 @@
+{
+  "ProblemID": "P-2024010112346",
+  "PID": "-8445609949610924115_1704101234568V2",
+  "ProblemTitle": "Memory exhaustion detected - OOM risk on demo-app",
+  "ProblemURL": "https://abc12345.live.dynatrace.com/#problems/problemdetails;pid=-8445609949610924115_1704101234568V2",
+  "State": "OPEN",
+  "ProblemSeverity": "CRITICAL",
+  "ProblemImpact": "APPLICATION",
+  "ImpactedEntity": "demo-app-7d9b8c6f45-m3n4p",
+  "ImpactedEntities": [
+    {
+      "type": "KUBERNETES_POD",
+      "name": "demo-app-7d9b8c6f45-m3n4p",
+      "entity": "KUBERNETES_POD-B2C3D4E5F6G7"
+    }
+  ],
+  "ProblemDetails": {
+    "displayName": "Memory exhaustion",
+    "endTime": -1,
+    "hasRootCause": true,
+    "id": "-8445609949610924115_1704101234568V2",
+    "impactLevel": "APPLICATION",
+    "severityLevel": "CRITICAL",
+    "startTime": 1704101234568,
+    "status": "OPEN"
+  },
+  "Tags": [
+    "env:production",
+    "app:demo-app",
+    "team:platform"
+  ],
+  "StartTime": 1704101234568,
+  "EndTime": -1
+}

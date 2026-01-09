@@ -1,0 +1,6 @@
+---
+# Organizations for AAP Controller
+controller_organizations:
+  - name: "{{ organization_name }}"
+    description: "Organization for Dynatrace Event-Driven Ansible demo"
+    galaxy_credentials: []

@@ -1,0 +1,90 @@
+---
+# Job Templates for AAP Controller - Dynatrace Remediation
+controller_templates:
+  # ---------------------------------------------------------------------------
+  # High CPU Remediation
+  # ---------------------------------------------------------------------------
+  - name: "Remediate High CPU"
+    description: "Restart pods experiencing high CPU usage"
+    organization: "{{ organization_name }}"
+    project: "{{ project_name }}"
+    playbook: "playbooks/remediation/remediate_high_cpu.yml"
+    inventory: "OpenShift Cluster"
+    credentials:
+      - "OpenShift API Credential"
+    ask_variables_on_launch: true
+    ask_labels_on_launch: true
+    extra_vars:
+      problem_id: ""
+      affected_entity: ""
+      namespace: "{{ target_namespace }}"
+
+  # ---------------------------------------------------------------------------
+  # Memory Exhaustion Remediation
+  # ---------------------------------------------------------------------------
+  - name: "Remediate Memory Exhaustion"
+    description: "Scale deployment or restart pods with high memory usage"
+    organization: "{{ organization_name }}"
+    project: "{{ project_name }}"
+    playbook: "playbooks/remediation/remediate_memory.yml"
+    inventory: "OpenShift Cluster"
+    credentials:
+      - "OpenShift API Credential"
+    ask_variables_on_launch: true
+    ask_labels_on_launch: true
+    extra_vars:
+      problem_id: ""
+      affected_entity: ""
+      namespace: "{{ target_namespace }}"
+      scale_replicas: 3
+
+  # ---------------------------------------------------------------------------
+  # Pod Crash Remediation
+  # ---------------------------------------------------------------------------
+  - name: "Remediate Pod Crash"
+    description: "Delete crashed pods and trigger deployment rollout"
+    organization: "{{ organization_name }}"
+    project: "{{ project_name }}"
+    playbook: "playbooks/remediation/remediate_pod_crash.yml"
+    inventory: "OpenShift Cluster"
+    credentials:
+      - "OpenShift API Credential"
+    ask_variables_on_launch: true
+    ask_labels_on_launch: true
+    extra_vars:
+      problem_id: ""
+      affected_entity: ""
+      namespace: "{{ target_namespace }}"
+
+  # ---------------------------------------------------------------------------
+  # Generic Problem Handler
+  # ---------------------------------------------------------------------------
+  - name: "Handle Dynatrace Problem"
+    description: "Generic handler for Dynatrace problems - logs and acknowledges"
+    organization: "{{ organization_name }}"
+    project: "{{ project_name }}"
+    playbook: "playbooks/remediation/handle_problem.yml"
+    inventory: "Localhost"
+    ask_variables_on_launch: true
+    ask_labels_on_launch: true
+    extra_vars:
+      problem_id: ""
+      problem_title: ""
+      problem_details: {}
+
+  # ---------------------------------------------------------------------------
+  # Comment on Problem in Dynatrace
+  # ---------------------------------------------------------------------------
+  - name: "Comment on Dynatrace Problem"
+    description: "Add remediation comment to a Dynatrace problem"
+    organization: "{{ organization_name }}"
+    project: "{{ project_name }}"
+    playbook: "playbooks/utilities/comment_problem.yml"
+    inventory: "Localhost"
+    ask_variables_on_launch: true
+    ask_labels_on_launch: true
+    extra_vars:
+      problem_id: ""
+      comment: "Remediated by Ansible Automation Platform"
+      dynatrace_environment_url: "{{ dynatrace_environment_url }}"
+      dynatrace_api_token: "{{ dynatrace_api_token }}"
