@@ -1,0 +1,128 @@
+---
+# =============================================================================
+# Dynatrace Problem Handler Rulebook
+# =============================================================================
+# This rulebook processes Dynatrace problem notifications received via
+# Event Stream and triggers appropriate remediation job templates in AAP.
+# =============================================================================
+
+- name: Handle Dynatrace Problems
+  hosts: all
+  sources:
+    # Event Stream source - receives events from EDA Controller Event Stream
+    - name: dynatrace_events
+      ansible.eda.pg_listener:
+        dsn: "{{ EDA_PG_DSN }}"
+        channels:
+          - "{{ EDA_CHANNEL }}"
+
+  rules:
+    # -------------------------------------------------------------------------
+    # High CPU Problem
+    # -------------------------------------------------------------------------
+    - name: Remediate High CPU
+      condition: >-
+        event.payload.ProblemTitle is search("CPU", ignorecase=true) or
+        event.payload.ProblemTitle is search("saturation", ignorecase=true)
+      action:
+        run_job_template:
+          name: "Remediate High CPU"
+          organization: "Dynatrace Demo"
+          job_args:
+            extra_vars:
+              problem_id: "{{ event.payload.ProblemID }}"
+              problem_title: "{{ event.payload.ProblemTitle }}"
+              affected_entity: "{{ event.payload.ImpactedEntity | default('unknown') }}"
+              problem_url: "{{ event.payload.ProblemURL | default('') }}"
+              problem_severity: "{{ event.payload.ProblemSeverity | default('') }}"
+              namespace: "demo-app"
+            labels:
+              - 1
+              - 2
+              - 3
+
+    # -------------------------------------------------------------------------
+    # Memory Exhaustion Problem
+    # -------------------------------------------------------------------------
+    - name: Remediate Memory Exhaustion
+      condition: >-
+        event.payload.ProblemTitle is search("memory", ignorecase=true) or
+        event.payload.ProblemTitle is search("OOM", ignorecase=true)
+      action:
+        run_job_template:
+          name: "Remediate Memory Exhaustion"
+          organization: "Dynatrace Demo"
+          job_args:
+            extra_vars:
+              problem_id: "{{ event.payload.ProblemID }}"
+              problem_title: "{{ event.payload.ProblemTitle }}"
+              affected_entity: "{{ event.payload.ImpactedEntity | default('unknown') }}"
+              namespace: "demo-app"
+              scale_replicas: 3
+            labels:
+              - 1
+              - 2
+              - 3
+
+    # -------------------------------------------------------------------------
+    # Pod Crash Problem
+    # -------------------------------------------------------------------------
+    - name: Remediate Pod Crash
+      condition: >-
+        event.payload.ProblemTitle is search("crash", ignorecase=true) or
+        event.payload.ProblemTitle is search("CrashLoop", ignorecase=true) or
+        event.payload.ProblemTitle is search("restart", ignorecase=true)
+      action:
+        run_job_template:
+          name: "Remediate Pod Crash"
+          organization: "Dynatrace Demo"
+          job_args:
+            extra_vars:
+              problem_id: "{{ event.payload.ProblemID }}"
+              problem_title: "{{ event.payload.ProblemTitle }}"
+              affected_entity: "{{ event.payload.ImpactedEntity | default('unknown') }}"
+              namespace: "demo-app"
+            labels:
+              - 1
+              - 2
+              - 3
+
+    # -------------------------------------------------------------------------
+    # Default Handler - Log and Acknowledge
+    # -------------------------------------------------------------------------
+    - name: Handle Unknown Problem
+      condition: >-
+        event.payload.ProblemID is defined and
+        event.payload.State == "OPEN"
+      action:
+        run_job_template:
+          name: "Handle Dynatrace Problem"
+          organization: "Dynatrace Demo"
+          job_args:
+            extra_vars:
+              problem_id: "{{ event.payload.ProblemID }}"
+              problem_title: "{{ event.payload.ProblemTitle }}"
+              problem_details: "{{ event | to_json }}"
+            labels:
+              - 1
+              - 3
+
+    # -------------------------------------------------------------------------
+    # Problem Resolved - Close Tracking
+    # -------------------------------------------------------------------------
+    - name: Problem Resolved
+      condition: >-
+        event.payload.ProblemID is defined and
+        event.payload.State == "RESOLVED"
+      action:
+        debug:
+          msg: "Problem {{ event.payload.ProblemID }} has been resolved in Dynatrace"
+
+    # -------------------------------------------------------------------------
+    # Catch All - Debug any received event
+    # -------------------------------------------------------------------------
+    - name: Debug All Events
+      condition: event.payload.ProblemID is defined
+      action:
+        debug:
+          msg: "Received event: {{ event }}"

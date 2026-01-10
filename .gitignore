@@ -1,0 +1,57 @@
+# Ansible
+*.retry
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+.ansible/
+
+# Collections
+collections/
+
+# Vault files (if encrypted separately)
+*.vault
+
+# Local configuration (contains secrets)
+vars.yml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# Sensitive files
+*.pem
+*.key
+*.crt
+credentials.yml
+secrets.yml
+
+# Terraform (if used)
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Build artifacts
+dist/
+build/

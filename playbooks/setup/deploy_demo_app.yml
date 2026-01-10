@@ -1,0 +1,59 @@
+---
+# =============================================================================
+# Deploy Demo App
+# =============================================================================
+# Deploys a simple nginx app for demonstrating EDA remediation on OpenShift
+# =============================================================================
+
+- name: Deploy Demo Application
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    app_namespace: "{{ target_namespace | default('demo-app') }}"
+    manifests_path: "{{ playbook_dir }}/../../demo/app"
+
+  tasks:
+    - name: Create namespace
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ manifests_path }}/namespace.yml"
+
+    - name: Deploy application
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ manifests_path }}/deployment.yml"
+
+    - name: Create service
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ manifests_path }}/service.yml"
+
+    - name: Wait for deployment to be ready
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: demo-app
+        namespace: "{{ app_namespace }}"
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 120
+      register: deployment_status
+
+    - name: Display deployment status
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          DEMO APP DEPLOYED SUCCESSFULLY
+          ============================================
+          Namespace: {{ app_namespace }}
+          Deployment: demo-app
+          Replicas: {{ deployment_status.resources[0].status.readyReplicas | default(0) }}
+          ============================================
+
+          You can now send Dynatrace problem webhooks
+          and watch the remediation in action!
+          ============================================

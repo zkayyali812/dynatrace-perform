@@ -1,0 +1,105 @@
+---
+# =============================================================================
+# Dynatrace Closed-Loop Remediation Rulebook
+# =============================================================================
+# This rulebook triggers job templates with close_problem: true to enable
+# full closed-loop automation (remediation + Dynatrace problem comment).
+#
+# The remediation playbooks will automatically add a comment to the problem
+# in Dynatrace after successful remediation when close_problem is set to true.
+# =============================================================================
+
+- name: Handle Dynatrace Problems (Closed-Loop)
+  hosts: all
+  sources:
+    # Event Stream source - receives events from EDA Controller Event Stream
+    - name: dynatrace_events
+      ansible.eda.pg_listener:
+        dsn: "{{ EDA_PG_DSN }}"
+        channels:
+          - "{{ EDA_CHANNEL }}"
+
+  rules:
+    # -------------------------------------------------------------------------
+    # High CPU Problem - Closed-Loop
+    # -------------------------------------------------------------------------
+    - name: Remediate High CPU (Closed-Loop)
+      condition: >-
+        event.payload.ProblemTitle is search("CPU", ignorecase=true) or
+        event.payload.ProblemTitle is search("saturation", ignorecase=true)
+      action:
+        run_job_template:
+          name: "Remediate High CPU"
+          organization: "Dynatrace Demo"
+          job_args:
+            extra_vars:
+              problem_id: "{{ event.payload.ProblemID }}"
+              problem_title: "{{ event.payload.ProblemTitle }}"
+              affected_entity: "{{ event.payload.ImpactedEntity | default('unknown') }}"
+              problem_url: "{{ event.payload.ProblemURL | default('') }}"
+              problem_severity: "{{ event.payload.ProblemSeverity | default('') }}"
+              namespace: "demo-app"
+              close_problem: true
+            labels:
+              - 1
+              - 2
+              - 3
+
+    # -------------------------------------------------------------------------
+    # Memory Exhaustion Problem - Closed-Loop
+    # -------------------------------------------------------------------------
+    - name: Remediate Memory Exhaustion (Closed-Loop)
+      condition: >-
+        event.payload.ProblemTitle is search("memory", ignorecase=true) or
+        event.payload.ProblemTitle is search("OOM", ignorecase=true)
+      action:
+        run_job_template:
+          name: "Remediate Memory Exhaustion"
+          organization: "Dynatrace Demo"
+          job_args:
+            extra_vars:
+              problem_id: "{{ event.payload.ProblemID }}"
+              problem_title: "{{ event.payload.ProblemTitle }}"
+              affected_entity: "{{ event.payload.ImpactedEntity | default('unknown') }}"
+              namespace: "demo-app"
+              scale_replicas: 3
+              close_problem: true
+            labels:
+              - 1
+              - 2
+              - 3
+
+    # -------------------------------------------------------------------------
+    # Pod Crash Problem - Closed-Loop
+    # -------------------------------------------------------------------------
+    - name: Remediate Pod Crash (Closed-Loop)
+      condition: >-
+        event.payload.ProblemTitle is search("crash", ignorecase=true) or
+        event.payload.ProblemTitle is search("CrashLoop", ignorecase=true) or
+        event.payload.ProblemTitle is search("restart", ignorecase=true)
+      action:
+        run_job_template:
+          name: "Remediate Pod Crash"
+          organization: "Dynatrace Demo"
+          job_args:
+            extra_vars:
+              problem_id: "{{ event.payload.ProblemID }}"
+              problem_title: "{{ event.payload.ProblemTitle }}"
+              affected_entity: "{{ event.payload.ImpactedEntity | default('unknown') }}"
+              namespace: "demo-app"
+              close_problem: true
+            labels:
+              - 1
+              - 2
+              - 3
+
+    # -------------------------------------------------------------------------
+    # Problem Resolved - Log only
+    # -------------------------------------------------------------------------
+    - name: Problem Resolved
+      condition: >-
+        event.payload.ProblemID is defined and
+        event.payload.State == "RESOLVED"
+      action:
+        debug:
+          msg: "Problem {{ event.payload.ProblemID }} has been resolved in Dynatrace"

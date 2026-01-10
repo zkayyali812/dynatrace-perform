@@ -1,0 +1,47 @@
+{
+  "ProblemID": "P-2024010112347",
+  "PID": "-8445609949610924116_1704101234569V2",
+  "ProblemTitle": "Pod crash detected - CrashLoopBackOff on demo-app",
+  "ProblemURL": "https://abc12345.live.dynatrace.com/#problems/problemdetails;pid=-8445609949610924116_1704101234569V2",
+  "State": "OPEN",
+  "ProblemSeverity": "CRITICAL",
+  "ProblemImpact": "APPLICATION",
+  "ImpactedEntity": "demo-app-7d9b8c6f45-crash1",
+  "ImpactedEntities": [
+    {
+      "type": "KUBERNETES_POD",
+      "name": "demo-app-7d9b8c6f45-crash1",
+      "entity": "KUBERNETES_POD-C3D4E5F6G7H8"
+    }
+  ],
+  "ProblemDetails": {
+    "displayName": "Container crash",
+    "endTime": -1,
+    "hasRootCause": true,
+    "id": "-8445609949610924116_1704101234569V2",
+    "impactLevel": "APPLICATION",
+    "severityLevel": "CRITICAL",
+    "startTime": 1704101234569,
+    "status": "OPEN",
+    "evidenceDetails": {
+      "totalCount": 1,
+      "details": [
+        {
+          "evidenceType": "EVENT",
+          "displayName": "Container restart",
+          "entity": {
+            "entityId": "KUBERNETES_POD-C3D4E5F6G7H8",
+            "name": "demo-app-7d9b8c6f45-crash1"
+          }
+        }
+      ]
+    }
+  },
+  "Tags": [
+    "env:production",
+    "app:demo-app",
+    "team:platform"
+  ],
+  "StartTime": 1704101234569,
+  "EndTime": -1
+}

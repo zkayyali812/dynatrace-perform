@@ -1,0 +1,128 @@
+---
+# =============================================================================
+# Keycloak LDAP User Federation Configuration
+# =============================================================================
+# Configures Keycloak to sync users from OpenLDAP
+# =============================================================================
+ldap_federation:
+  name: "openldap"
+  providerId: "ldap"
+  providerType: "org.keycloak.storage.UserStorageProvider"
+  config:
+    enabled:
+      - "true"
+    priority:
+      - "0"
+    fullSyncPeriod:
+      - "-1"
+    changedSyncPeriod:
+      - "-1"
+    cachePolicy:
+      - "DEFAULT"
+    evictionDay:
+      - ""
+    evictionHour:
+      - ""
+    evictionMinute:
+      - ""
+    maxLifespan:
+      - ""
+    batchSizeForSync:
+      - "1000"
+    editMode:
+      - "READ_ONLY"
+    importEnabled:
+      - "true"
+    syncRegistrations:
+      - "false"
+    vendor:
+      - "other"
+    usePasswordModifyExtendedOp:
+      - "false"
+    usernameLDAPAttribute:
+      - "uid"
+    rdnLDAPAttribute:
+      - "uid"
+    uuidLDAPAttribute:
+      - "entryUUID"
+    userObjectClasses:
+      - "inetOrgPerson, organizationalPerson"
+    connectionUrl:
+      - "ldap://openldap.openldap.svc.cluster.local:389"
+    usersDn:
+      - "ou=users,dc=example,dc=com"
+    authType:
+      - "simple"
+    bindDn:
+      - "cn=admin,dc=example,dc=com"
+    startTls:
+      - "false"
+    useKerberosForPasswordAuthentication:
+      - "false"
+    trustEmail:
+      - "true"
+    validatePasswordPolicy:
+      - "false"
+    searchScope:
+      - "1"
+    useTruststoreSpi:
+      - "ldapsOnly"
+    connectionPooling:
+      - "true"
+    connectionPoolingAuthentication:
+      - ""
+    connectionPoolingDebug:
+      - ""
+    connectionPoolingInitSize:
+      - ""
+    connectionPoolingMaxSize:
+      - ""
+    connectionPoolingPrefSize:
+      - ""
+    connectionPoolingProtocol:
+      - ""
+    connectionPoolingTimeout:
+      - ""
+    connectionTimeout:
+      - ""
+    readTimeout:
+      - ""
+    pagination:
+      - "true"
+
+# Group mapper configuration
+group_mapper:
+  name: "group-ldap-mapper"
+  providerId: "group-ldap-mapper"
+  providerType: "org.keycloak.storage.ldap.mappers.LDAPStorageMapper"
+  config:
+    groups.dn:
+      - "ou=groups,dc=example,dc=com"
+    group.name.ldap.attribute:
+      - "cn"
+    group.object.classes:
+      - "groupOfNames"
+    preserve.group.inheritance:
+      - "true"
+    ignore.missing.groups:
+      - "false"
+    membership.ldap.attribute:
+      - "member"
+    membership.attribute.type:
+      - "DN"
+    membership.user.ldap.attribute:
+      - "uid"
+    groups.ldap.filter:
+      - ""
+    mode:
+      - "READ_ONLY"
+    user.roles.retrieve.strategy:
+      - "LOAD_GROUPS_BY_MEMBER_ATTRIBUTE"
+    memberof.ldap.attribute:
+      - "memberOf"
+    mapped.group.attributes:
+      - ""
+    drop.non.existing.groups.during.sync:
+      - "false"
+    groups.path:
+      - "/"

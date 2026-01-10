@@ -1,0 +1,168 @@
+---
+# =============================================================================
+# Remediate Pod Crash Playbook
+# =============================================================================
+# Triggered by EDA when Dynatrace detects pod crashes/CrashLoopBackOff
+# Actions: Delete stuck pods, trigger rollout restart
+# =============================================================================
+
+- name: Remediate Pod Crashes on OpenShift/Kubernetes
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    _problem_id: "{{ problem_id | default('unknown') }}"
+    _affected_entity: "{{ affected_entity | default('unknown') }}"
+    _namespace: "{{ namespace | default('demo-app') }}"
+
+  tasks:
+    - name: Log remediation start
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          POD CRASH REMEDIATION STARTED
+          ============================================
+          Problem ID: {{ _problem_id }}
+          Problem Title: {{ problem_title | default('Pod Crash') }}
+          Affected Entity: {{ _affected_entity }}
+          Namespace: {{ _namespace }}
+          ============================================
+
+    - name: Extract deployment name from affected entity
+      ansible.builtin.set_fact:
+        # Strip pod hash suffixes (e.g., demo-app-7d9b8c6f45-x2k9m -> demo-app)
+        deployment_name: "{{ _affected_entity | regex_replace('-[a-z0-9]{5,10}-[a-z0-9]{4,6}$', '') | default('demo-app', true) }}"
+      when: _affected_entity != 'unknown'
+
+    - name: Use default deployment name if entity unknown
+      ansible.builtin.set_fact:
+        deployment_name: "demo-app"
+      when: _affected_entity == 'unknown' or deployment_name | default('') == ''
+
+    - name: Find crashed or failing pods
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ _namespace }}"
+        label_selectors:
+          - "app={{ deployment_name }}"
+      register: all_pods
+
+    - name: Identify pods in CrashLoopBackOff or Error state
+      ansible.builtin.set_fact:
+        crashed_pods: >-
+          {{ all_pods.resources | selectattr('status.phase', 'in', ['Failed', 'Unknown']) | list +
+             all_pods.resources | selectattr('status.containerStatuses', 'defined') |
+             selectattr('status.containerStatuses.0.state.waiting.reason', 'defined') |
+             selectattr('status.containerStatuses.0.state.waiting.reason', 'in', ['CrashLoopBackOff', 'Error', 'ImagePullBackOff']) | list }}
+
+    - name: Display crashed pods
+      ansible.builtin.debug:
+        msg: "Found {{ crashed_pods | length }} crashed/failing pods"
+
+    - name: Delete crashed pods
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Pod
+        name: "{{ item.metadata.name }}"
+        namespace: "{{ _namespace }}"
+        state: absent
+        wait: true
+        wait_timeout: 60
+      loop: "{{ crashed_pods }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      when: crashed_pods | length > 0
+      ignore_errors: true
+
+    - name: Trigger deployment rollout restart
+      kubernetes.core.k8s:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ deployment_name }}"
+        namespace: "{{ _namespace }}"
+        definition:
+          spec:
+            template:
+              metadata:
+                annotations:
+                  kubectl.kubernetes.io/restartedAt: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+        merge_type: strategic-merge
+      register: rollout_result
+
+    - name: Wait for rollout to complete
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ deployment_name }}"
+        namespace: "{{ _namespace }}"
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 300
+
+    - name: Verify pods are running
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ _namespace }}"
+        label_selectors:
+          - "app={{ deployment_name }}"
+      register: pods_after
+
+    - name: Log remediation complete
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          POD CRASH REMEDIATION COMPLETED
+          ============================================
+          Problem ID: {{ _problem_id }}
+          Deployment: {{ deployment_name }}
+          Crashed Pods Deleted: {{ crashed_pods | length }}
+          Pods Now Running: {{ pods_after.resources | selectattr('status.phase', 'equalto', 'Running') | list | length }}
+          ============================================
+
+    - name: Set stats for workflow
+      ansible.builtin.set_stats:
+        data:
+          remediation_status: "success"
+          problem_id: "{{ _problem_id }}"
+          crashed_pods_deleted: "{{ crashed_pods | length }}"
+
+    # -------------------------------------------------------------------------
+    # Close Problem in Dynatrace (if close_problem is true)
+    # -------------------------------------------------------------------------
+    - name: Add remediation comment to Dynatrace problem
+      ansible.builtin.uri:
+        url: "{{ dynatrace_environment_url }}/api/v2/problems/{{ _problem_id }}/comments"
+        method: POST
+        headers:
+          Authorization: "Api-Token {{ dynatrace_api_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          context: "Ansible Automation Platform"
+          message: |
+            Automated remediation completed successfully.
+
+            Problem: {{ problem_title | default('Pod Crash') }}
+            Action: Delete crashed pods and rollout restart
+            Deployment: {{ deployment_name }}
+            Crashed Pods Deleted: {{ crashed_pods | length }}
+            Namespace: {{ _namespace }}
+            Timestamp: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
+        status_code: [201, 200]
+        validate_certs: false
+      when:
+        - close_problem | default(false) | bool
+        - _problem_id != 'unknown'
+        - dynatrace_environment_url is defined
+        - dynatrace_api_token is defined
+      ignore_errors: true
+
+    - name: Log Dynatrace comment status
+      ansible.builtin.debug:
+        msg: "Added remediation comment to Dynatrace problem {{ _problem_id }}"
+      when: close_problem | default(false) | bool

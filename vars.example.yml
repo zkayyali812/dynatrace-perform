@@ -1,0 +1,123 @@
+---
+# =============================================================================
+# Dynatrace Perform Demo - Configuration Variables
+# =============================================================================
+# Copy this file to all.yml and update with your environment values
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# AAP Gateway Configuration (AAP 2.5+)
+# -----------------------------------------------------------------------------
+# Single gateway URL for both Controller and EDA access
+gateway_hostname: "http://localhost"
+gateway_username: "admin"
+gateway_password: "{{ lookup('env', 'AAP_PASSWORD') }}"
+gateway_validate_certs: false
+
+# Derived hostnames (used by collections)
+controller_hostname: "{{ gateway_hostname }}"
+controller_username: "{{ gateway_username }}"
+controller_password: "{{ gateway_password }}"
+controller_validate_certs: "{{ gateway_validate_certs }}"
+
+eda_controller_hostname: "{{ gateway_hostname }}"
+eda_controller_username: "{{ gateway_username }}"
+eda_controller_password: "{{ gateway_password }}"
+eda_controller_validate_certs: "{{ gateway_validate_certs }}"
+
+# -----------------------------------------------------------------------------
+# OpenShift Configuration
+# -----------------------------------------------------------------------------
+openshift_api_url: "https://api.cluster.example.com:6443"
+openshift_api_token: "{{ lookup('env', 'OPENSHIFT_TOKEN') }}"
+openshift_validate_certs: false
+
+# Target namespace for remediation
+target_namespace: "demo-app"
+
+# -----------------------------------------------------------------------------
+# Dynatrace Configuration (for real integration)
+# -----------------------------------------------------------------------------
+dynatrace_environment_url: "https://abc12345.live.dynatrace.com"
+dynatrace_api_token: "{{ lookup('env', 'DYNATRACE_API_TOKEN') }}"
+
+# -----------------------------------------------------------------------------
+# Demo Configuration
+# -----------------------------------------------------------------------------
+# Organization name for AAP resources
+organization_name: "Dynatrace Demo"
+
+# Project configuration
+project_name: "Dynatrace EDA Remediation"
+project_scm_url: "https://github.com/zkayyali812/dynatrace-perform.git"
+project_scm_branch: "main"
+
+# Decision Environment for EDA
+decision_environment_name: "Dynatrace EDA DE"
+decision_environment_image: "quay.io/ansible/ansible-rulebook:latest"
+
+# Event Stream name (AAP 2.5+)
+event_stream_name: "dynatrace-problems"
+
+# -----------------------------------------------------------------------------
+# Identity Stack Configuration (Keycloak + OpenLDAP + SAML)
+# -----------------------------------------------------------------------------
+# Deployment flags - set to true to enable specific components
+deploy_openldap: false
+deploy_keycloak: false
+configure_keycloak: false
+configure_aap_ldap: false
+configure_aap_saml: false
+
+# Keycloak Configuration
+keycloak_admin_username: "admin"
+keycloak_admin_password: "{{ lookup('env', 'KEYCLOAK_ADMIN_PASSWORD') }}"
+keycloak_db_password: "{{ lookup('env', 'KEYCLOAK_DB_PASSWORD') }}"
+keycloak_validate_certs: false
+keycloak_realm: "aap"
+
+# OpenLDAP Configuration
+ldap_admin_password: "{{ lookup('env', 'LDAP_ADMIN_PASSWORD') }}"
+ldap_bind_password: "{{ ldap_admin_password }}"
+
+# Identity users (available via both LDAP and SAML)
+# These users will be created in OpenLDAP and synced to Keycloak
+identity_users:
+  - username: "alice"
+    first_name: "Alice"
+    last_name: "Admin"
+    email: "alice@example.com"
+    password: "{{ lookup('env', 'USER_PASSWORD') | default('ChangeMe123!', true) }}"
+    group: "aap-admins"
+  - username: "bob"
+    first_name: "Bob"
+    last_name: "Builder"
+    email: "bob@example.com"
+    password: "{{ lookup('env', 'USER_PASSWORD') | default('ChangeMe123!', true) }}"
+    group: "aap-developers"
+  - username: "charlie"
+    first_name: "Charlie"
+    last_name: "Checker"
+    email: "charlie@example.com"
+    password: "{{ lookup('env', 'USER_PASSWORD') | default('ChangeMe123!', true) }}"
+    group: "aap-operators"
+  - username: "diana"
+    first_name: "Diana"
+    last_name: "Developer"
+    email: "diana@example.com"
+    password: "{{ lookup('env', 'USER_PASSWORD') | default('ChangeMe123!', true) }}"
+    group: "aap-developers"
+  - username: "eve"
+    first_name: "Eve"
+    last_name: "Engineer"
+    email: "eve@example.com"
+    password: "{{ lookup('env', 'USER_PASSWORD') | default('ChangeMe123!', true) }}"
+    group: "aap-operators"
+
+# AAP SAML Configuration
+aap_organization_name: "Default"
+aap_organization_display_name: "Default Organization"
+aap_saml_tech_contact_name: "Admin"
+aap_saml_tech_contact_email: "admin@example.com"
+aap_saml_support_contact_name: "Support"
+aap_saml_support_contact_email: "support@example.com"

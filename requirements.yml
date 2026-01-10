@@ -1,0 +1,21 @@
+---
+collections:
+  # AAP Controller Configuration (Red Hat Automation Hub)
+  - name: ansible.controller
+    source: https://console.redhat.com/api/automation-hub/
+
+  # EDA Controller Configuration (Red Hat Automation Hub)
+  - name: ansible.eda
+    source: https://console.redhat.com/api/automation-hub/
+
+  # AAP Platform Configuration (Red Hat Automation Hub)
+  - name: ansible.platform
+    source: https://console.redhat.com/api/automation-hub/
+
+  # Kubernetes/OpenShift
+  - name: kubernetes.core
+
+  - name: redhat.openshift
+
+  # Ansible utilities
+  - name: ansible.utils

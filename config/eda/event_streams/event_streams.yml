@@ -1,0 +1,10 @@
+---
+# Event Streams for EDA Controller (AAP 2.5+)
+# Event Streams provide webhook endpoints that forward events to rulebook activations
+eda_event_streams:
+  - name: "{{ event_stream_name }}"
+    description: "Event stream for receiving Dynatrace problem notifications"
+    organization: "{{ organization_name }}"
+    event_stream_type: "Token Event Stream"
+    credential_name: "Dynatrace Webhook Token"
+    forward_events: true

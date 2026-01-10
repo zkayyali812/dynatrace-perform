@@ -1,0 +1,17 @@
+---
+# =============================================================================
+# Keycloak Realm Configuration
+# =============================================================================
+# AAP realm definition for use with configure_keycloak.yml playbook
+# =============================================================================
+realm:
+  realm: "aap"
+  displayName: "Ansible Automation Platform"
+  enabled: true
+  sslRequired: "external"
+  registrationAllowed: false
+  loginWithEmailAllowed: false
+  duplicateEmailsAllowed: false
+  resetPasswordAllowed: false
+  editUsernameAllowed: false
+  bruteForceProtected: true

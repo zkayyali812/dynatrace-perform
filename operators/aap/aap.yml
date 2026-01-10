@@ -1,0 +1,33 @@
+---
+# =============================================================================
+# Ansible Automation Platform (Unified)
+# =============================================================================
+# Single resource that deploys Controller, EDA, and Hub together
+# AAP 2.5+ unified deployment model
+# =============================================================================
+apiVersion: aap.ansible.com/v1alpha1
+kind: AnsibleAutomationPlatform
+metadata:
+  name: aap
+  namespace: aap
+spec:
+  # Automation Controller configuration
+  controller:
+    no_log: false
+
+  # Event-Driven Ansible configuration
+  eda:
+    automation_server_ssl_verify: 'no'
+    disabled: false
+    no_log: false
+
+  # Private Automation Hub configuration
+  hub:
+    disabled: false
+    file_storage_size: 10Gi
+    file_storage_storage_class: nfs-local-rwx
+    file_storage_access_mode: ReadWriteOnce
+    no_log: false
+    storage_type: file
+
+  no_log: false

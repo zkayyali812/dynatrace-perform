@@ -1,0 +1,7 @@
+---
+# Decision Environments for EDA Controller
+eda_decision_environments:
+  - name: "{{ decision_environment_name }}"
+    description: "Decision Environment for processing Dynatrace problem events"
+    image_url: "{{ decision_environment_image }}"
+    organization: "{{ organization_name }}"
