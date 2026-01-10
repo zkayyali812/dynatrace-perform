@@ -5,7 +5,7 @@
 # Simulates Dynatrace problem notifications for demo purposes
 # Usage: ./send_problem.sh <problem_type> [event_stream_url]
 #
-# Problem types: high_cpu, memory, pod_crash, service_unavailable, error_rate
+# Problem types: high_cpu, memory, pod_crash
 # =============================================================================
 
 set -e

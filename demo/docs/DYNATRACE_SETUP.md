@@ -190,8 +190,7 @@ Tag filter:
 Problem type:
   - Include: CPU saturation
   - Include: Memory issues
-  - Include: Service availability
-  - Include: Error rate
+  - Include: Pod crash
 ```
 
 ---
@@ -220,7 +219,7 @@ The closed-loop functionality is built into the remediation playbooks. When trig
 
 ### Configure Dynatrace Credentials
 
-Add your Dynatrace credentials to `group_vars/all.yml`:
+Add your Dynatrace credentials to `vars.yml`:
 
 ```yaml
 # Dynatrace Configuration (for closed-loop)
@@ -239,7 +238,7 @@ In EDA Controller:
 1. Disable the "Dynatrace Problem Handler" activation
 2. Enable the "Dynatrace Closed-Loop Handler" activation
 
-Or via Config as Code, edit `eda_config/rulebook_activations/rulebook_activations.yml`:
+Or via Config as Code, edit `config/eda/rulebook_activations/rulebook_activations.yml`:
 - Set first activation `state: "disabled"`
 - Set second activation `state: "enabled"`
 
@@ -275,35 +274,26 @@ Generate actual problems that Dynatrace will detect:
 
 #### High CPU Problem
 ```bash
-# Deploy stress container to your app namespace
-oc run stress-test --image=progrium/stress \
-  --namespace=demo-app \
-  --restart=Never \
-  -- --cpu 4 --timeout 120s
+# Deploy stress container to your app namespace (OpenShift-compatible)
+oc run stress-test -n demo-app --restart=Never \
+  --image=polinux/stress \
+  --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"stress-test","image":"polinux/stress","command":["stress"],"args":["--cpu","4","--timeout","120s"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
 
 # Watch for Dynatrace to detect the problem (may take 2-5 minutes)
 ```
 
 #### Memory Exhaustion
 ```bash
-# Deploy memory stress
-oc run memory-stress --image=progrium/stress \
-  --namespace=demo-app \
-  --restart=Never \
-  -- --vm 2 --vm-bytes 512M --timeout 120s
+# Deploy memory stress (OpenShift-compatible)
+oc run memory-stress -n demo-app --restart=Never \
+  --image=polinux/stress \
+  --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"memory-stress","image":"polinux/stress","command":["stress"],"args":["--vm","2","--vm-bytes","512M","--timeout","120s"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
 ```
 
 #### Pod Crash
 ```bash
 # Force a pod to crash
 oc delete pod -l app=demo-app --namespace=demo-app
-```
-
-#### Service Unavailable
-```bash
-# Scale deployment to zero
-oc scale deployment demo-app --replicas=0 --namespace=demo-app
-# Wait for Dynatrace to detect, then watch EDA remediate
 ```
 
 ### Method 3: Use Dynatrace Custom Events API

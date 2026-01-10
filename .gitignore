@@ -13,7 +13,7 @@ collections/
 *.vault
 
 # Local configuration (contains secrets)
-group_vars/all.yml
+vars.yml
 
 # IDE
 .idea/

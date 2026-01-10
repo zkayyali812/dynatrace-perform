@@ -15,7 +15,7 @@
   gather_facts: false
 
   vars_files:
-    - ../../group_vars/all.yml
+    - ../../vars.yml
 
   module_defaults:
     group/ansible.controller.controller:
@@ -42,7 +42,7 @@
     # -------------------------------------------------------------------------
     - name: Load organization configuration
       ansible.builtin.include_vars:
-        file: ../../controller_config/organizations.yml
+        file: ../../config/controller/organizations.yml
 
     - name: Create organizations
       ansible.controller.organization:
@@ -58,7 +58,7 @@
     # -------------------------------------------------------------------------
     - name: Load labels configuration
       ansible.builtin.include_vars:
-        file: ../../controller_config/labels/labels.yml
+        file: ../../config/controller/labels/labels.yml
 
     - name: Create labels
       ansible.controller.label:
@@ -74,7 +74,7 @@
     # -------------------------------------------------------------------------
     - name: Load credential types configuration
       ansible.builtin.include_vars:
-        file: ../../controller_config/credentials/credential_types.yml
+        file: ../../config/controller/credentials/credential_types.yml
 
     - name: Create credential types
       ansible.controller.credential_type:
@@ -94,7 +94,7 @@
     # -------------------------------------------------------------------------
     - name: Load credentials configuration
       ansible.builtin.include_vars:
-        file: ../../controller_config/credentials/openshift_credentials.yml
+        file: ../../config/controller/credentials/openshift_credentials.yml
 
     - name: Create credentials
       ansible.controller.credential:
@@ -113,7 +113,7 @@
     # -------------------------------------------------------------------------
     - name: Load inventories configuration
       ansible.builtin.include_vars:
-        file: ../../controller_config/inventories/inventories.yml
+        file: ../../config/controller/inventories/inventories.yml
 
     - name: Create inventories
       ansible.controller.inventory:
@@ -128,7 +128,7 @@
 
     - name: Load hosts configuration
       ansible.builtin.include_vars:
-        file: ../../controller_config/inventories/hosts.yml
+        file: ../../config/controller/inventories/hosts.yml
 
     - name: Create hosts
       ansible.controller.host:
@@ -145,7 +145,7 @@
     # -------------------------------------------------------------------------
     - name: Load projects configuration
       ansible.builtin.include_vars:
-        file: ../../controller_config/projects/projects.yml
+        file: ../../config/controller/projects/projects.yml
 
     - name: Create projects
       ansible.controller.project:
@@ -170,7 +170,7 @@
     # -------------------------------------------------------------------------
     - name: Load job templates configuration
       ansible.builtin.include_vars:
-        file: ../../controller_config/job_templates/job_templates.yml
+        file: ../../config/controller/job_templates/job_templates.yml
 
     - name: Create job templates
       ansible.controller.job_template:
@@ -207,7 +207,7 @@
   gather_facts: false
 
   vars_files:
-    - ../../group_vars/all.yml
+    - ../../vars.yml
 
   module_defaults:
     group/ansible.eda.eda:
@@ -235,7 +235,7 @@
     # -------------------------------------------------------------------------
     - name: Load decision environments configuration
       ansible.builtin.include_vars:
-        file: ../../eda_config/decision_environments/decision_environments.yml
+        file: ../../config/eda/decision_environments/decision_environments.yml
 
     - name: Create decision environments
       ansible.eda.decision_environment:
@@ -253,7 +253,7 @@
     # -------------------------------------------------------------------------
     - name: Load EDA credentials configuration
       ansible.builtin.include_vars:
-        file: ../../eda_config/credentials/eda_credentials.yml
+        file: ../../config/eda/credentials/eda_credentials.yml
 
     - name: Create EDA credentials
       ansible.eda.credential:
@@ -272,7 +272,7 @@
     # -------------------------------------------------------------------------
     - name: Load EDA projects configuration
       ansible.builtin.include_vars:
-        file: ../../eda_config/projects/eda_projects.yml
+        file: ../../config/eda/projects/eda_projects.yml
 
     - name: Create EDA projects
       ansible.eda.project:
@@ -292,7 +292,7 @@
     # -------------------------------------------------------------------------
     - name: Load event streams configuration
       ansible.builtin.include_vars:
-        file: ../../eda_config/event_streams/event_streams.yml
+        file: ../../config/eda/event_streams/event_streams.yml
 
     - name: Create event streams
       ansible.eda.event_stream:
@@ -311,7 +311,7 @@
     # -------------------------------------------------------------------------
     - name: Load rulebook activations configuration
       ansible.builtin.include_vars:
-        file: ../../eda_config/rulebook_activations/rulebook_activations.yml
+        file: ../../config/eda/rulebook_activations/rulebook_activations.yml
 
     - name: Create rulebook activations
       ansible.eda.rulebook_activation:

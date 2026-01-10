@@ -33,14 +33,14 @@ This demo showcases **Event-Driven Ansible (EDA)** integrated with **Dynatrace**
 ├── operators/                  # Operator installation YAMLs
 │   ├── aap/                    # AAP operator & custom resources
 │   └── dynatrace/              # Dynatrace operator & DynaKube
-├── controller_config/          # AAP Controller Config as Code
+├── config/controller/          # AAP Controller Config as Code
 │   ├── credentials/            # Credential definitions
 │   ├── inventories/            # Inventory definitions
 │   ├── labels/                 # Label definitions for job tagging
 │   ├── projects/               # Project definitions
 │   ├── job_templates/          # Job template definitions
 │   └── execution_environments/ # EE definitions
-├── eda_config/                 # EDA Controller Config as Code
+├── config/eda/                 # EDA Controller Config as Code
 │   ├── credentials/            # EDA credentials
 │   ├── decision_environments/  # Decision environment definitions
 │   ├── projects/               # EDA project definitions
@@ -56,7 +56,8 @@ This demo showcases **Event-Driven Ansible (EDA)** integrated with **Dynatrace**
 │   ├── scripts/                # Webhook simulator scripts
 │   ├── payloads/               # Sample Dynatrace payloads
 │   └── docs/                   # Integration documentation
-└── group_vars/                 # Variable definitions
+├── vars.yml                    # Configuration variables (create from vars.example.yml)
+└── vars.example.yml            # Example configuration template
 ```
 
 ## Prerequisites
@@ -92,7 +93,7 @@ ansible-galaxy collection install -r requirements.yml
 Copy and edit the example variables:
 
 ```bash
-cp group_vars/all.example.yml group_vars/all.yml
+cp vars.example.yml vars.yml
 # Edit with your AAP/EDA Controller URLs and credentials
 ```
 
@@ -135,20 +136,17 @@ The demo app is a simple nginx deployment in the `demo-app` namespace. The remed
 - **High CPU**: Restart or scale the deployment
 - **Memory**: Scale up and delete pods to release memory
 - **Pod Crash**: Delete crashed pods and trigger rollout
-- **Service Unavailable**: Restart the deployment
-- **Error Rate**: Scale up replicas
 
 You can trigger real problems for Dynatrace to detect:
 
 ```bash
-# High CPU - run stress test
-oc run stress-test --image=progrium/stress -n demo-app --restart=Never -- --cpu 4 --timeout 60s
+# High CPU - run stress test (OpenShift-compatible)
+oc run stress-test -n demo-app --restart=Never \
+  --image=polinux/stress \
+  --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"stress-test","image":"polinux/stress","command":["stress"],"args":["--cpu","4","--timeout","60s"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
 
 # Pod Crash - delete pods
 oc delete pod -l app=demo-app -n demo-app
-
-# Service Unavailable - scale to zero
-oc scale deployment demo-app --replicas=0 -n demo-app
 ```
 
 ## Demo Walkthrough
@@ -166,8 +164,6 @@ For production integration with Dynatrace, see [demo/docs/DYNATRACE_SETUP.md](de
 | High CPU | `event.ProblemTitle contains "CPU"` | Restart high-CPU pods |
 | Memory Exhaustion | `event.ProblemTitle contains "memory"` | Scale deployment, clear caches |
 | Pod CrashLoopBackOff | `event.ProblemTitle contains "crash"` | Delete stuck pods, trigger rollout |
-| Service Unavailable | `event.ProblemTitle contains "availability"` | Restart deployment |
-| High Error Rate | `event.ProblemTitle contains "error rate"` | Scale up replicas |
 
 ## License
 

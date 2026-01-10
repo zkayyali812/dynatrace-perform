@@ -72,7 +72,7 @@ tree -L 2 .
 
 ```bash
 # Show job templates defined as code
-cat controller_config/job_templates/job_templates.yml
+cat config/controller/job_templates/job_templates.yml
 ```
 
 > "All our job templates are defined in YAML. We have specific remediations for CPU issues, memory problems, pod crashes, and more."
@@ -81,8 +81,8 @@ cat controller_config/job_templates/job_templates.yml
 
 ```bash
 # Show event streams and rulebook activations
-cat eda_config/event_streams/event_streams.yml
-cat eda_config/rulebook_activations/rulebook_activations.yml
+cat config/eda/event_streams/event_streams.yml
+cat config/eda/rulebook_activations/rulebook_activations.yml
 ```
 
 > "Event Streams provide a webhook endpoint that Dynatrace sends problem notifications to. The rulebook activation links everything together."
@@ -228,7 +228,7 @@ In EDA Controller:
 1. Disable "Dynatrace Problem Handler" activation
 2. Enable "Dynatrace Closed-Loop Handler" activation
 
-Or via Config as Code, edit `eda_config/rulebook_activations/rulebook_activations.yml`:
+Or via Config as Code, edit `config/eda/rulebook_activations/rulebook_activations.yml`:
 - Set first activation `state: "disabled"`
 - Set second activation `state: "enabled"`
 
@@ -238,25 +238,16 @@ Instead of using the webhook simulator, generate actual problems:
 
 #### High CPU (Will trigger CPU remediation)
 ```bash
-oc run stress-test --image=progrium/stress \
-  --namespace=demo-app \
-  --restart=Never \
-  -- --cpu 4 --timeout 120s
+oc run stress-test -n demo-app --restart=Never \
+  --image=polinux/stress \
+  --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"stress-test","image":"polinux/stress","command":["stress"],"args":["--cpu","4","--timeout","120s"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
 ```
 
 #### Memory Exhaustion
 ```bash
-oc run memory-stress --image=progrium/stress \
-  --namespace=demo-app \
-  --restart=Never \
-  -- --vm 2 --vm-bytes 512M --timeout 120s
-```
-
-#### Service Unavailable
-```bash
-# Scale down the demo app
-oc scale deployment demo-app --replicas=0 --namespace=demo-app
-# Watch Dynatrace detect, EDA remediate, and scale back up
+oc run memory-stress -n demo-app --restart=Never \
+  --image=polinux/stress \
+  --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"memory-stress","image":"polinux/stress","command":["stress"],"args":["--vm","2","--vm-bytes","512M","--timeout","120s"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
 ```
 
 ### Demo Flow for Closed-Loop
@@ -321,12 +312,6 @@ Skip Act 4 (Closed-Loop) and focus on the core event-to-remediation flow.
 
 # Send pod crash problem
 ./demo/scripts/send_problem.sh pod_crash
-
-# Send service unavailable problem
-./demo/scripts/send_problem.sh service_unavailable
-
-# Send error rate problem
-./demo/scripts/send_problem.sh error_rate
 
 # Send resolved notification
 ./demo/scripts/send_problem.sh resolved

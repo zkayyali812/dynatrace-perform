@@ -12,7 +12,7 @@
 
 - name: "Keycloak Config: Load configuration files"
   ansible.builtin.include_vars:
-    dir: "{{ playbook_dir }}/../../keycloak_config"
+    dir: "{{ playbook_dir }}/../../config/keycloak"
     extensions:
       - yml
       - yaml
