@@ -238,6 +238,8 @@ Instead of using the webhook simulator, generate actual problems:
 
 #### High CPU (Will trigger CPU remediation)
 ```bash
+# Delete existing pod first to allow re-running
+oc delete pod stress-test -n demo-app --ignore-not-found && \
 oc run stress-test -n demo-app --restart=Never \
   --image=polinux/stress \
   --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"stress-test","image":"polinux/stress","command":["stress"],"args":["--cpu","4","--timeout","120s"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
@@ -245,9 +247,18 @@ oc run stress-test -n demo-app --restart=Never \
 
 #### Memory Exhaustion
 ```bash
+# Delete existing pod first to allow re-running
+oc delete pod memory-stress -n demo-app --ignore-not-found && \
 oc run memory-stress -n demo-app --restart=Never \
   --image=polinux/stress \
   --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"memory-stress","image":"polinux/stress","command":["stress"],"args":["--vm","2","--vm-bytes","512M","--timeout","120s"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
+```
+
+#### Reset Demo Environment
+Run the "Reset Demo Environment" job template in AAP Controller, or manually:
+```bash
+oc delete pod stress-test memory-stress -n demo-app --ignore-not-found
+oc scale deployment demo-app -n demo-app --replicas=2
 ```
 
 ### Demo Flow for Closed-Loop

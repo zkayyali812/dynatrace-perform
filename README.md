@@ -120,7 +120,30 @@ oc get pods -n demo-app
 # Should see 2 pods running
 ```
 
-### 6. Test with Webhook Simulator
+### 6. Deploy Identity Stack (Optional)
+
+Deploy Keycloak and OpenLDAP for SSO authentication with AAP:
+
+```bash
+# Edit vars.yml to enable identity components
+# deploy_openldap: true
+# deploy_keycloak: true
+# configure_keycloak: true
+# configure_aap_ldap: true    # For LDAP auth
+# configure_aap_saml: true    # For SAML auth via Keycloak
+
+# Deploy identity stack
+ansible-playbook playbooks/setup/deploy_identity.yml
+```
+
+This creates:
+- **OpenLDAP** with 5 demo users (alice, bob, charlie, diana, eve)
+- **Keycloak** as SAML Identity Provider with LDAP federation
+- **AAP authenticators** for LDAP and/or SAML login
+
+Demo users are assigned to groups: `aap-admins`, `aap-developers`, `aap-operators`
+
+### 7. Test with Webhook Simulator
 
 ```bash
 # Send a simulated Dynatrace high CPU problem
@@ -141,12 +164,16 @@ You can trigger real problems for Dynatrace to detect:
 
 ```bash
 # High CPU - run stress test (OpenShift-compatible)
+oc delete pod stress-test -n demo-app --ignore-not-found && \
 oc run stress-test -n demo-app --restart=Never \
   --image=polinux/stress \
   --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"stress-test","image":"polinux/stress","command":["stress"],"args":["--cpu","4","--timeout","60s"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
 
 # Pod Crash - delete pods
 oc delete pod -l app=demo-app -n demo-app
+
+# Reset demo environment (via AAP job template)
+# Run the "Reset Demo Environment" job template in AAP Controller
 ```
 
 ## Demo Walkthrough

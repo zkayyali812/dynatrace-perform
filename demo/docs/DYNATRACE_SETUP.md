@@ -274,7 +274,8 @@ Generate actual problems that Dynatrace will detect:
 
 #### High CPU Problem
 ```bash
-# Deploy stress container to your app namespace (OpenShift-compatible)
+# Deploy stress container (delete first to allow re-running)
+oc delete pod stress-test -n demo-app --ignore-not-found && \
 oc run stress-test -n demo-app --restart=Never \
   --image=polinux/stress \
   --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"stress-test","image":"polinux/stress","command":["stress"],"args":["--cpu","4","--timeout","120s"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
@@ -284,7 +285,8 @@ oc run stress-test -n demo-app --restart=Never \
 
 #### Memory Exhaustion
 ```bash
-# Deploy memory stress (OpenShift-compatible)
+# Deploy memory stress (delete first to allow re-running)
+oc delete pod memory-stress -n demo-app --ignore-not-found && \
 oc run memory-stress -n demo-app --restart=Never \
   --image=polinux/stress \
   --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"memory-stress","image":"polinux/stress","command":["stress"],"args":["--vm","2","--vm-bytes","512M","--timeout","120s"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'

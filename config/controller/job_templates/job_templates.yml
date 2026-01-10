@@ -88,3 +88,19 @@ controller_templates:
       comment: "Remediated by Ansible Automation Platform"
       dynatrace_environment_url: "{{ dynatrace_environment_url }}"
       dynatrace_api_token: "{{ dynatrace_api_token }}"
+
+  # ---------------------------------------------------------------------------
+  # Reset Demo Environment
+  # ---------------------------------------------------------------------------
+  - name: "Reset Demo Environment"
+    description: "Clean up and reset the demo environment for re-running demos"
+    organization: "{{ organization_name }}"
+    project: "{{ project_name }}"
+    playbook: "playbooks/utilities/reset_demo.yml"
+    inventory: "OpenShift Cluster"
+    credentials:
+      - "OpenShift API Credential"
+    ask_variables_on_launch: true
+    extra_vars:
+      target_namespace: "{{ target_namespace }}"
+      demo_app_replicas: 2
