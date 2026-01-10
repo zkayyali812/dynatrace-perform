@@ -1,0 +1,234 @@
+---
+# =============================================================================
+# Configure AAP SAML Authentication
+# =============================================================================
+# Tasks to configure AAP Gateway to use Keycloak as SAML IdP using
+# ansible.platform collection:
+# - Create SAML authenticator
+# - Create authenticator maps for team/org assignment
+# - Create teams
+# Guard variable: configure_aap_saml (default: false)
+# =============================================================================
+
+- name: "AAP SAML: Get Keycloak Route URL"
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: keycloak
+    namespace: keycloak
+  register: keycloak_route
+  when: keycloak_url is not defined
+
+- name: "AAP SAML: Set Keycloak URL fact"
+  ansible.builtin.set_fact:
+    keycloak_url: "https://{{ keycloak_route.resources[0].spec.host }}"
+  when: keycloak_url is not defined
+
+- name: "AAP SAML: Download Keycloak SAML IdP metadata"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/realms/{{ keycloak_realm }}/protocol/saml/descriptor"
+    method: GET
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    return_content: true
+    status_code: 200
+  register: saml_metadata
+  retries: 5
+  delay: 10
+  until: saml_metadata.status == 200
+
+- name: "AAP SAML: Extract IdP certificate from metadata"
+  ansible.builtin.set_fact:
+    idp_x509_cert_raw: "{{ saml_metadata.content | regex_search('<ds:X509Certificate>([^<]+)</ds:X509Certificate>', '\\1') | first }}"
+
+- name: "AAP SAML: Format IdP certificate as PEM"
+  ansible.builtin.set_fact:
+    idp_x509_cert: "-----BEGIN CERTIFICATE-----\n{{ idp_x509_cert_raw }}\n-----END CERTIFICATE-----"
+
+- name: "AAP SAML: Generate SP private key"
+  ansible.builtin.command:
+    cmd: openssl genrsa 2048
+  register: sp_private_key_result
+  changed_when: false
+  delegate_to: localhost
+
+- name: "AAP SAML: Generate SP self-signed certificate"
+  ansible.builtin.shell: |
+    echo "{{ sp_private_key_result.stdout }}" | openssl req -new -x509 -key /dev/stdin -days 3650 -subj "/CN=AAP SAML SP/O=Ansible/C=US"
+  register: sp_public_cert_result
+  changed_when: false
+  delegate_to: localhost
+
+- name: "AAP SAML: Set SP certificate facts"
+  ansible.builtin.set_fact:
+    sp_private_key: "{{ sp_private_key_result.stdout }}"
+    sp_public_cert: "{{ sp_public_cert_result.stdout }}"
+
+- name: "AAP SAML: Create SAML authenticator"
+  ansible.platform.authenticator:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "Keycloak"
+    slug: "keycloak"
+    enabled: true
+    create_objects: true
+    remove_users: false
+    type: "ansible_base.authentication.authenticator_plugins.saml"
+    configuration:
+      SP_ENTITY_ID: "{{ controller_hostname }}"
+      CALLBACK_URL: "{{ controller_hostname }}/api/gateway/social/complete/keycloak/"
+      SP_PUBLIC_CERT: "{{ sp_public_cert }}"
+      SP_PRIVATE_KEY: "{{ sp_private_key }}"
+      IDP_URL: "{{ keycloak_url }}/realms/{{ keycloak_realm }}/protocol/saml"
+      IDP_X509_CERT: "{{ idp_x509_cert }}"
+      IDP_ENTITY_ID: "{{ keycloak_url }}/realms/{{ keycloak_realm }}"
+      IDP_ATTR_USERNAME: "username"
+      IDP_ATTR_EMAIL: "email"
+      IDP_ATTR_FIRST_NAME: "first_name"
+      IDP_ATTR_LAST_NAME: "last_name"
+      IDP_ATTR_USER_PERMANENT_ID: "username"
+      IDP_GROUPS: "groups"
+      ORG_INFO:
+        en-US:
+          name: "{{ aap_organization_name | default('Default') }}"
+          displayname: "{{ aap_organization_display_name | default('Default Organization') }}"
+          url: "{{ controller_hostname }}"
+      TECHNICAL_CONTACT:
+        givenName: "{{ aap_saml_tech_contact_name | default('Admin') }}"
+        emailAddress: "{{ aap_saml_tech_contact_email | default('admin@example.com') }}"
+      SUPPORT_CONTACT:
+        givenName: "{{ aap_saml_support_contact_name | default('Support') }}"
+        emailAddress: "{{ aap_saml_support_contact_email | default('support@example.com') }}"
+    state: present
+
+- name: "AAP SAML: Create Administrators team"
+  ansible.platform.team:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "Administrators"
+    description: "System Administrators team"
+    organization: "Default"
+    state: present
+
+- name: "AAP SAML: Create Developers team"
+  ansible.platform.team:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "Developers"
+    description: "Developers team"
+    organization: "Default"
+    state: present
+
+- name: "AAP SAML: Create Operators team"
+  ansible.platform.team:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "Operators"
+    description: "Operators team"
+    organization: "Default"
+    state: present
+
+- name: "AAP SAML: Create authenticator map for aap-admins group"
+  ansible.platform.authenticator_map:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "saml-aap-admins-to-administrators"
+    authenticator: "Keycloak"
+    map_type: "team"
+    organization: "Default"
+    team: "Administrators"
+    role: "Team Admin"
+    order: 1
+    revoke: false
+    triggers:
+      groups:
+        has_or:
+          - "aap-admins"
+    state: present
+
+- name: "AAP SAML: Create authenticator map for aap-developers group"
+  ansible.platform.authenticator_map:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "saml-aap-developers-to-developers"
+    authenticator: "Keycloak"
+    map_type: "team"
+    organization: "Default"
+    team: "Developers"
+    role: "Team Member"
+    order: 2
+    revoke: false
+    triggers:
+      groups:
+        has_or:
+          - "aap-developers"
+    state: present
+
+- name: "AAP SAML: Create authenticator map for aap-operators group"
+  ansible.platform.authenticator_map:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "saml-aap-operators-to-operators"
+    authenticator: "Keycloak"
+    map_type: "team"
+    organization: "Default"
+    team: "Operators"
+    role: "Team Member"
+    order: 3
+    revoke: false
+    triggers:
+      groups:
+        has_or:
+          - "aap-operators"
+    state: present
+
+- name: "AAP SAML: Create org admin map for aap-admins group"
+  ansible.platform.authenticator_map:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "saml-aap-admins-org-admin"
+    authenticator: "Keycloak"
+    map_type: "organization"
+    organization: "Default"
+    role: "Organization Admin"
+    order: 0
+    revoke: false
+    triggers:
+      groups:
+        has_or:
+          - "aap-admins"
+    state: present
+
+- name: "AAP SAML: Configuration complete"
+  ansible.builtin.debug:
+    msg:
+      - "AAP SAML configuration complete"
+      - "SAML Authenticator: Keycloak"
+      - "Login URL: {{ gateway_hostname }}/sso/login/saml/?idp=keycloak"
+      - ""
+      - "Demo Users (authenticate via Keycloak SAML):"
+      - "  - alice (aap-admins)"
+      - "  - bob (aap-developers)"
+      - "  - charlie (aap-operators)"
+      - "  - diana (aap-developers)"
+      - "  - eve (aap-operators)"
+      - ""
+      - "Team Mappings:"
+      - "  - aap-admins -> Administrators team (Team Admin + Org Admin)"
+      - "  - aap-developers -> Developers team (Team Member)"
+      - "  - aap-operators -> Operators team (Team Member)"

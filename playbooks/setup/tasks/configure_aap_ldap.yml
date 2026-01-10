@@ -1,0 +1,176 @@
+---
+# =============================================================================
+# Configure AAP LDAP Authentication
+# =============================================================================
+# Tasks to configure AAP Gateway to use OpenLDAP for authentication using
+# ansible.platform collection:
+# - Create LDAP authenticator
+# - Create authenticator maps for team/org assignment
+# Guard variable: configure_aap_ldap (default: false)
+# =============================================================================
+
+- name: "AAP LDAP: Create LDAP authenticator"
+  ansible.platform.authenticator:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "OpenLDAP"
+    slug: "openldap"
+    enabled: true
+    create_objects: true
+    remove_users: false
+    type: "ansible_base.authentication.authenticator_plugins.ldap"
+    configuration:
+      SERVER_URI:
+        - "ldap://openldap.openldap.svc.cluster.local:389"
+      BIND_DN: "cn=admin,dc=example,dc=com"
+      BIND_PASSWORD: "{{ ldap_admin_password }}"
+      START_TLS: false
+      USER_SEARCH:
+        - "ou=users,dc=example,dc=com"
+        - "SCOPE_SUBTREE"
+        - "(uid=%(user)s)"
+      USER_ATTR_MAP:
+        first_name: "cn"
+        last_name: "sn"
+        email: "mail"
+      GROUP_SEARCH:
+        - "ou=groups,dc=example,dc=com"
+        - "SCOPE_SUBTREE"
+        - "(objectClass=groupOfNames)"
+      GROUP_TYPE: "GroupOfNamesType"
+      GROUP_TYPE_PARAMS:
+        name_attr: "cn"
+    state: present
+
+- name: "AAP LDAP: Create Administrators team"
+  ansible.platform.team:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "Administrators"
+    description: "System Administrators team"
+    organization: "Default"
+    state: present
+
+- name: "AAP LDAP: Create Developers team"
+  ansible.platform.team:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "Developers"
+    description: "Developers team"
+    organization: "Default"
+    state: present
+
+- name: "AAP LDAP: Create Operators team"
+  ansible.platform.team:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "Operators"
+    description: "Operators team"
+    organization: "Default"
+    state: present
+
+- name: "AAP LDAP: Create authenticator map for aap-admins group"
+  ansible.platform.authenticator_map:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "ldap-aap-admins-to-administrators"
+    authenticator: "OpenLDAP"
+    map_type: "team"
+    organization: "Default"
+    team: "Administrators"
+    role: "Team Admin"
+    order: 1
+    revoke: false
+    triggers:
+      groups:
+        has_or:
+          - "aap-admins"
+    state: present
+
+- name: "AAP LDAP: Create authenticator map for aap-developers group"
+  ansible.platform.authenticator_map:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "ldap-aap-developers-to-developers"
+    authenticator: "OpenLDAP"
+    map_type: "team"
+    organization: "Default"
+    team: "Developers"
+    role: "Team Member"
+    order: 2
+    revoke: false
+    triggers:
+      groups:
+        has_or:
+          - "aap-developers"
+    state: present
+
+- name: "AAP LDAP: Create authenticator map for aap-operators group"
+  ansible.platform.authenticator_map:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "ldap-aap-operators-to-operators"
+    authenticator: "OpenLDAP"
+    map_type: "team"
+    organization: "Default"
+    team: "Operators"
+    role: "Team Member"
+    order: 3
+    revoke: false
+    triggers:
+      groups:
+        has_or:
+          - "aap-operators"
+    state: present
+
+- name: "AAP LDAP: Create org admin map for aap-admins group"
+  ansible.platform.authenticator_map:
+    gateway_hostname: "{{ gateway_hostname }}"
+    gateway_username: "{{ gateway_username }}"
+    gateway_password: "{{ gateway_password }}"
+    validate_certs: "{{ gateway_validate_certs }}"
+    name: "ldap-aap-admins-org-admin"
+    authenticator: "OpenLDAP"
+    map_type: "organization"
+    organization: "Default"
+    role: "Organization Admin"
+    order: 0
+    revoke: false
+    triggers:
+      groups:
+        has_or:
+          - "aap-admins"
+    state: present
+
+- name: "AAP LDAP: Configuration complete"
+  ansible.builtin.debug:
+    msg:
+      - "AAP LDAP configuration complete"
+      - "LDAP Authenticator: OpenLDAP"
+      - "LDAP Server: ldap://openldap.openldap.svc.cluster.local:389"
+      - ""
+      - "Demo Users (authenticate with LDAP password):"
+      - "  - alice (aap-admins)"
+      - "  - bob (aap-developers)"
+      - "  - charlie (aap-operators)"
+      - "  - diana (aap-developers)"
+      - "  - eve (aap-operators)"
+      - ""
+      - "Team Mappings:"
+      - "  - aap-admins -> Administrators team (Team Admin + Org Admin)"
+      - "  - aap-developers -> Developers team (Team Member)"
+      - "  - aap-operators -> Operators team (Team Member)"

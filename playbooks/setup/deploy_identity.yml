@@ -1,0 +1,128 @@
+---
+# =============================================================================
+# Deploy Identity Stack
+# =============================================================================
+# Master playbook for deploying the complete identity stack.
+# Each component can be enabled/disabled via guard variables:
+#
+#   deploy_openldap: true      - Deploy OpenLDAP directory service
+#   deploy_keycloak: true      - Deploy Keycloak identity provider
+#   configure_keycloak: true   - Configure Keycloak (realm, LDAP, SAML client)
+#   configure_aap_ldap: true   - Configure AAP LDAP authentication
+#   configure_aap_saml: true   - Configure AAP SAML authentication
+#
+# All sensitive data is managed via Ansible variables in group_vars.
+# =============================================================================
+- name: Deploy Identity Stack
+  hosts: localhost
+  gather_facts: false
+
+  vars_files:
+    - "{{ playbook_dir }}/../../group_vars/all.yml"
+
+  tasks:
+    # =========================================================================
+    # Phase 1: Deploy OpenLDAP
+    # =========================================================================
+    - name: "Phase 1: Deploy OpenLDAP"
+      when: deploy_openldap | default(false) | bool
+      block:
+        - name: "Starting OpenLDAP deployment"
+          ansible.builtin.debug:
+            msg: "Deploying OpenLDAP directory service..."
+
+        - name: Include OpenLDAP deployment tasks
+          ansible.builtin.include_tasks: tasks/deploy_openldap.yml
+
+    # =========================================================================
+    # Phase 2: Deploy Keycloak
+    # =========================================================================
+    - name: "Phase 2: Deploy Keycloak"
+      when: deploy_keycloak | default(false) | bool
+      block:
+        - name: "Starting Keycloak deployment"
+          ansible.builtin.debug:
+            msg: "Deploying Keycloak identity provider..."
+
+        - name: Include Keycloak deployment tasks
+          ansible.builtin.include_tasks: tasks/deploy_keycloak.yml
+
+    # =========================================================================
+    # Phase 3: Configure Keycloak
+    # =========================================================================
+    - name: "Phase 3: Configure Keycloak"
+      when: configure_keycloak | default(false) | bool
+      block:
+        - name: "Starting Keycloak configuration"
+          ansible.builtin.debug:
+            msg: "Configuring Keycloak realm, LDAP federation, and SAML client..."
+
+        - name: Include Keycloak configuration tasks
+          ansible.builtin.include_tasks: tasks/configure_keycloak.yml
+
+    # =========================================================================
+    # Phase 4: Configure AAP LDAP
+    # =========================================================================
+    - name: "Phase 4: Configure AAP LDAP"
+      when: configure_aap_ldap | default(false) | bool
+      block:
+        - name: "Starting AAP LDAP configuration"
+          ansible.builtin.debug:
+            msg: "Configuring AAP LDAP authentication..."
+
+        - name: Include AAP LDAP configuration tasks
+          ansible.builtin.include_tasks: tasks/configure_aap_ldap.yml
+
+    # =========================================================================
+    # Phase 5: Configure AAP SAML
+    # =========================================================================
+    - name: "Phase 5: Configure AAP SAML"
+      when: configure_aap_saml | default(false) | bool
+      block:
+        - name: "Starting AAP SAML configuration"
+          ansible.builtin.debug:
+            msg: "Configuring AAP SAML authentication..."
+
+        - name: Include AAP SAML configuration tasks
+          ansible.builtin.include_tasks: tasks/configure_aap_saml.yml
+
+    # =========================================================================
+    # Summary
+    # =========================================================================
+    - name: Get Keycloak Route URL
+      kubernetes.core.k8s_info:
+        api_version: route.openshift.io/v1
+        kind: Route
+        name: keycloak
+        namespace: keycloak
+      register: keycloak_route
+      when: deploy_keycloak | default(false) | bool
+      ignore_errors: true
+
+    - name: Display deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "============================================"
+          - "Identity Stack Deployment Complete"
+          - "============================================"
+          - ""
+          - "Components deployed:"
+          - "  - OpenLDAP: {{ 'Yes' if (deploy_openldap | default(false) | bool) else 'Skipped' }}"
+          - "  - Keycloak: {{ 'Yes' if (deploy_keycloak | default(false) | bool) else 'Skipped' }}"
+          - "  - Keycloak Config: {{ 'Yes' if (configure_keycloak | default(false) | bool) else 'Skipped' }}"
+          - "  - AAP LDAP: {{ 'Yes' if (configure_aap_ldap | default(false) | bool) else 'Skipped' }}"
+          - "  - AAP SAML: {{ 'Yes' if (configure_aap_saml | default(false) | bool) else 'Skipped' }}"
+          - ""
+          - "OpenLDAP:"
+          - "  Service: ldap://openldap.openldap.svc.cluster.local:389"
+          - "  Base DN: dc=example,dc=com"
+          - ""
+          - "Keycloak:"
+          - "  URL: https://{{ keycloak_route.resources[0].spec.host | default('N/A') }}"
+          - "  Admin Console: https://{{ keycloak_route.resources[0].spec.host | default('N/A') }}/admin"
+          - "  Realm: {{ keycloak_realm | default('aap') }}"
+          - ""
+          - "AAP SAML Login:"
+          - "  {{ controller_hostname }}/sso/login/saml/?idp=Keycloak"
+          - ""
+          - "============================================"

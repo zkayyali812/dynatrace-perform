@@ -1,0 +1,31 @@
+---
+# =============================================================================
+# Keycloak Realm Roles Configuration
+# =============================================================================
+# Realm roles for AAP access control
+# These roles map to AAP organization/team membership
+# =============================================================================
+realm_roles:
+  - name: "aap_admin"
+    description: "AAP System Administrator role"
+    composite: false
+
+  - name: "aap_developer"
+    description: "AAP Developer role"
+    composite: false
+
+  - name: "aap_operator"
+    description: "AAP Operator role"
+    composite: false
+
+# Group to role mappings
+# These will be applied after LDAP sync to map LDAP groups to realm roles
+group_role_mappings:
+  - group: "aap-admins"
+    role: "aap_admin"
+
+  - group: "aap-developers"
+    role: "aap_developer"
+
+  - group: "aap-operators"
+    role: "aap_operator"

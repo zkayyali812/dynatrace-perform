@@ -1,0 +1,196 @@
+---
+# =============================================================================
+# Verify Identity Stack
+# =============================================================================
+# Verifies the identity stack deployment:
+# - OpenLDAP is running
+# - Keycloak is ready
+# - LDAP users are synced
+# - SAML client is configured
+# =============================================================================
+- name: Verify Identity Stack
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    # =========================================================================
+    # Verify OpenLDAP
+    # =========================================================================
+    - name: Check OpenLDAP deployment
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: openldap
+        namespace: openldap
+      register: openldap_deployment
+
+    - name: Verify OpenLDAP is running
+      ansible.builtin.assert:
+        that:
+          - openldap_deployment.resources | length > 0
+          - openldap_deployment.resources[0].status.readyReplicas is defined
+          - openldap_deployment.resources[0].status.readyReplicas >= 1
+        fail_msg: "OpenLDAP is not running"
+        success_msg: "OpenLDAP is running"
+
+    # =========================================================================
+    # Verify Keycloak
+    # =========================================================================
+    - name: Check Keycloak CR status
+      kubernetes.core.k8s_info:
+        api_version: k8s.keycloak.org/v2alpha1
+        kind: Keycloak
+        name: keycloak
+        namespace: keycloak
+      register: keycloak_cr
+
+    - name: Verify Keycloak is ready
+      ansible.builtin.assert:
+        that:
+          - keycloak_cr.resources | length > 0
+          - keycloak_cr.resources[0].status is defined
+          - keycloak_cr.resources[0].status.conditions is defined
+          - keycloak_cr.resources[0].status.conditions | selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length > 0
+        fail_msg: "Keycloak is not ready"
+        success_msg: "Keycloak is ready"
+
+    - name: Get Keycloak Route
+      kubernetes.core.k8s_info:
+        api_version: route.openshift.io/v1
+        kind: Route
+        name: keycloak
+        namespace: keycloak
+      register: keycloak_route
+
+    - name: Set Keycloak URL
+      ansible.builtin.set_fact:
+        keycloak_url: "https://{{ keycloak_route.resources[0].spec.host }}"
+
+    # =========================================================================
+    # Verify Keycloak API Access
+    # =========================================================================
+    - name: Get Keycloak admin token
+      ansible.builtin.uri:
+        url: "{{ keycloak_url }}/realms/master/protocol/openid-connect/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: "password"
+          client_id: "admin-cli"
+          username: "{{ keycloak_admin_username }}"
+          password: "{{ keycloak_admin_password }}"
+        validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+        status_code: 200
+      register: token_response
+
+    - name: Set access token
+      ansible.builtin.set_fact:
+        keycloak_token: "{{ token_response.json.access_token }}"
+
+    # =========================================================================
+    # Verify AAP Realm
+    # =========================================================================
+    - name: Check AAP realm exists
+      ansible.builtin.uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_token }}"
+        validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+        status_code: 200
+      register: realm_check
+
+    - name: Verify AAP realm
+      ansible.builtin.debug:
+        msg: "AAP realm '{{ keycloak_realm }}' exists"
+
+    # =========================================================================
+    # Verify LDAP Federation
+    # =========================================================================
+    - name: Check LDAP federation
+      ansible.builtin.uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/components?name=openldap&type=org.keycloak.storage.UserStorageProvider"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_token }}"
+        validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+        status_code: 200
+      register: ldap_federation
+
+    - name: Verify LDAP federation configured
+      ansible.builtin.assert:
+        that:
+          - ldap_federation.json | length > 0
+        fail_msg: "LDAP federation not configured"
+        success_msg: "LDAP federation is configured"
+
+    # =========================================================================
+    # Verify LDAP Users Synced
+    # =========================================================================
+    - name: Get users in AAP realm
+      ansible.builtin.uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/users"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_token }}"
+        validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+        status_code: 200
+      register: realm_users
+
+    - name: Display synced users
+      ansible.builtin.debug:
+        msg: "Synced users: {{ realm_users.json | map(attribute='username') | list }}"
+
+    - name: Verify demo users exist
+      ansible.builtin.assert:
+        that:
+          - "'admin' in (realm_users.json | map(attribute='username') | list)"
+          - "'developer' in (realm_users.json | map(attribute='username') | list)"
+          - "'operator' in (realm_users.json | map(attribute='username') | list)"
+        fail_msg: "Demo users not synced from LDAP"
+        success_msg: "Demo users synced from LDAP"
+
+    # =========================================================================
+    # Verify SAML Client
+    # =========================================================================
+    - name: Check SAML client
+      ansible.builtin.uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients?clientId={{ controller_hostname | urlencode }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_token }}"
+        validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+        status_code: 200
+      register: saml_client
+
+    - name: Verify SAML client configured
+      ansible.builtin.assert:
+        that:
+          - saml_client.json | length > 0
+        fail_msg: "SAML client not configured"
+        success_msg: "SAML client is configured"
+
+    # =========================================================================
+    # Summary
+    # =========================================================================
+    - name: Display verification summary
+      ansible.builtin.debug:
+        msg:
+          - "============================================"
+          - "Identity Stack Verification Complete"
+          - "============================================"
+          - ""
+          - "✓ OpenLDAP: Running"
+          - "✓ Keycloak: Ready"
+          - "✓ AAP Realm: {{ keycloak_realm }}"
+          - "✓ LDAP Federation: Configured"
+          - "✓ Users Synced: {{ realm_users.json | map(attribute='username') | list | join(', ') }}"
+          - "✓ SAML Client: Configured"
+          - ""
+          - "Keycloak Admin Console:"
+          - "  {{ keycloak_url }}/admin"
+          - ""
+          - "AAP SAML Login URL:"
+          - "  {{ controller_hostname }}/sso/login/saml/?idp=Keycloak"
+          - ""
+          - "============================================"

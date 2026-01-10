@@ -1,0 +1,89 @@
+---
+# =============================================================================
+# AAP SAML Client Configuration
+# =============================================================================
+# SAML client for AAP Controller authentication
+# The entityId and redirectUris will be templated with controller_hostname
+# =============================================================================
+saml_client:
+  clientId: "{{ controller_hostname }}"
+  name: "AAP Controller"
+  description: "SAML client for Ansible Automation Platform Controller"
+  enabled: true
+  protocol: "saml"
+  publicClient: false
+  frontchannelLogout: true
+  rootUrl: "{{ controller_hostname }}"
+  baseUrl: "{{ controller_hostname }}"
+  redirectUris:
+    - "{{ controller_hostname }}/*"
+  adminUrl: "{{ controller_hostname }}"
+  webOrigins:
+    - "{{ controller_hostname }}"
+  attributes:
+    saml.assertion.signature: "true"
+    saml.authnstatement: "true"
+    saml.client.signature: "false"
+    saml.encrypt: "false"
+    saml.force.post.binding: "true"
+    saml.multivalued.roles: "false"
+    saml.onetimeuse.condition: "false"
+    saml.server.signature: "true"
+    saml.server.signature.keyinfo.ext: "false"
+    saml.signature.algorithm: "RSA_SHA256"
+    saml_assertion_consumer_url_post: "{{ controller_hostname }}/api/gateway/social/complete/keycloak/"
+    saml_force_name_id_format: "true"
+    saml_name_id_format: "username"
+    saml_signature_canonicalization_method: "http://www.w3.org/2001/10/xml-exc-c14n#"
+    saml_single_logout_service_url_post: "{{ controller_hostname }}/api/gateway/social/complete/keycloak/"
+  fullScopeAllowed: false
+  defaultClientScopes: []
+  optionalClientScopes: []
+
+# Protocol mappers for AAP attributes
+protocol_mappers:
+  - name: "username"
+    protocol: "saml"
+    protocolMapper: "saml-user-property-mapper"
+    config:
+      attribute.name: "username"
+      attribute.nameformat: "Basic"
+      friendly.name: "username"
+      user.attribute: "username"
+
+  - name: "email"
+    protocol: "saml"
+    protocolMapper: "saml-user-property-mapper"
+    config:
+      attribute.name: "email"
+      attribute.nameformat: "Basic"
+      friendly.name: "email"
+      user.attribute: "email"
+
+  - name: "firstName"
+    protocol: "saml"
+    protocolMapper: "saml-user-property-mapper"
+    config:
+      attribute.name: "first_name"
+      attribute.nameformat: "Basic"
+      friendly.name: "first_name"
+      user.attribute: "firstName"
+
+  - name: "lastName"
+    protocol: "saml"
+    protocolMapper: "saml-user-property-mapper"
+    config:
+      attribute.name: "last_name"
+      attribute.nameformat: "Basic"
+      friendly.name: "last_name"
+      user.attribute: "lastName"
+
+  - name: "groups"
+    protocol: "saml"
+    protocolMapper: "saml-group-membership-mapper"
+    config:
+      attribute.name: "groups"
+      attribute.nameformat: "Basic"
+      friendly.name: "groups"
+      full.path: "false"
+      single: "false"

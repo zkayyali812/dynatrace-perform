@@ -1,0 +1,210 @@
+---
+# =============================================================================
+# Deploy OpenLDAP
+# =============================================================================
+# Tasks to deploy OpenLDAP directory service on OpenShift
+# Guard variable: deploy_openldap (default: true)
+# =============================================================================
+
+- name: "OpenLDAP: Create namespace"
+  kubernetes.core.k8s:
+    src: "{{ openldap_manifests_path | default(playbook_dir + '/../../operators/openldap') }}/namespace.yml"
+    state: present
+
+- name: "OpenLDAP: Create service account"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: openldap-sa
+        namespace: openldap
+
+- name: "OpenLDAP: Grant anyuid SCC to service account"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: openldap-anyuid
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: system:openshift:scc:anyuid
+      subjects:
+        - kind: ServiceAccount
+          name: openldap-sa
+          namespace: openldap
+
+- name: "OpenLDAP: Create admin secret"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: openldap-admin-secret
+        namespace: openldap
+      type: Opaque
+      stringData:
+        adminpassword: "{{ ldap_admin_password }}"
+
+- name: "OpenLDAP: Generate users LDIF"
+  ansible.builtin.set_fact:
+    ldap_users_ldif: |
+      {% for user in identity_users %}
+      dn: uid={{ user.username }},ou=users,dc=example,dc=com
+      objectClass: inetOrgPerson
+      objectClass: organizationalPerson
+      objectClass: person
+      objectClass: top
+      cn: {{ user.first_name }} {{ user.last_name }}
+      sn: {{ user.last_name }}
+      givenName: {{ user.first_name }}
+      uid: {{ user.username }}
+      mail: {{ user.email }}
+      userPassword: {{ user.password }}
+
+      {% endfor %}
+
+- name: "OpenLDAP: Generate groups LDIF"
+  ansible.builtin.set_fact:
+    ldap_groups_ldif: |
+      dn: cn=aap-admins,ou=groups,dc=example,dc=com
+      objectClass: groupOfNames
+      cn: aap-admins
+      {% for user in identity_users | selectattr('group', 'equalto', 'aap-admins') %}
+      member: uid={{ user.username }},ou=users,dc=example,dc=com
+      {% endfor %}
+
+      dn: cn=aap-developers,ou=groups,dc=example,dc=com
+      objectClass: groupOfNames
+      cn: aap-developers
+      {% for user in identity_users | selectattr('group', 'equalto', 'aap-developers') %}
+      member: uid={{ user.username }},ou=users,dc=example,dc=com
+      {% endfor %}
+
+      dn: cn=aap-operators,ou=groups,dc=example,dc=com
+      objectClass: groupOfNames
+      cn: aap-operators
+      {% for user in identity_users | selectattr('group', 'equalto', 'aap-operators') %}
+      member: uid={{ user.username }},ou=users,dc=example,dc=com
+      {% endfor %}
+
+- name: "OpenLDAP: Create seed data configmap"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: openldap-seed-data
+        namespace: openldap
+      data:
+        01-structure.ldif: |
+          dn: ou=users,dc=example,dc=com
+          objectClass: organizationalUnit
+          ou: users
+
+          dn: ou=groups,dc=example,dc=com
+          objectClass: organizationalUnit
+          ou: groups
+        02-users.ldif: "{{ ldap_users_ldif }}"
+        03-groups.ldif: "{{ ldap_groups_ldif }}"
+
+- name: "OpenLDAP: Deploy"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: openldap
+        namespace: openldap
+        labels:
+          app: openldap
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: openldap
+        template:
+          metadata:
+            labels:
+              app: openldap
+          spec:
+            serviceAccountName: openldap-sa
+            containers:
+              - name: openldap
+                image: docker.io/osixia/openldap:1.5.0
+                ports:
+                  - containerPort: 389
+                    name: ldap
+                  - containerPort: 636
+                    name: ldaps
+                env:
+                  - name: LDAP_ORGANISATION
+                    value: "Example Inc"
+                  - name: LDAP_DOMAIN
+                    value: "example.com"
+                  - name: LDAP_ADMIN_PASSWORD
+                    valueFrom:
+                      secretKeyRef:
+                        name: openldap-admin-secret
+                        key: adminpassword
+                  - name: LDAP_SEED_INTERNAL_LDIF_PATH
+                    value: "/ldifs"
+                volumeMounts:
+                  - name: ldif-data
+                    mountPath: /ldifs
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+            volumes:
+              - name: ldif-data
+                configMap:
+                  name: openldap-seed-data
+
+- name: "OpenLDAP: Create service"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: openldap
+        namespace: openldap
+      spec:
+        selector:
+          app: openldap
+        ports:
+          - name: ldap
+            port: 389
+            targetPort: 389
+          - name: ldaps
+            port: 636
+            targetPort: 636
+
+- name: "OpenLDAP: Wait for deployment to be ready"
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: openldap
+    namespace: openldap
+  register: openldap_deployment
+  until:
+    - openldap_deployment.resources | length > 0
+    - openldap_deployment.resources[0].status.readyReplicas is defined
+    - openldap_deployment.resources[0].status.readyReplicas == openldap_deployment.resources[0].spec.replicas
+  retries: 30
+  delay: 10
+
+- name: "OpenLDAP: Deployment complete"
+  ansible.builtin.debug:
+    msg: "OpenLDAP is ready at ldap://openldap.openldap.svc.cluster.local:389"

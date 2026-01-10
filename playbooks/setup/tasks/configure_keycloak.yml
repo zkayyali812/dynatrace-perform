@@ -1,0 +1,321 @@
+---
+# =============================================================================
+# Configure Keycloak
+# =============================================================================
+# Tasks to configure Keycloak via REST API:
+# - Create AAP realm
+# - Configure LDAP User Federation
+# - Create SAML client for AAP
+# - Create realm roles and group mappings
+# Guard variable: configure_keycloak (default: true)
+# =============================================================================
+
+- name: "Keycloak Config: Load configuration files"
+  ansible.builtin.include_vars:
+    dir: "{{ playbook_dir }}/../../keycloak_config"
+    extensions:
+      - yml
+      - yaml
+    ignore_unknown_extensions: true
+    depth: 2
+
+- name: "Keycloak Config: Get admin credentials from operator-managed secret"
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: keycloak-initial-admin
+    namespace: keycloak
+  register: keycloak_admin_secret
+
+- name: "Keycloak Config: Set admin credentials facts"
+  ansible.builtin.set_fact:
+    keycloak_admin_username: "{{ keycloak_admin_secret.resources[0].data.username | b64decode }}"
+    keycloak_admin_password: "{{ keycloak_admin_secret.resources[0].data.password | b64decode }}"
+
+- name: "Keycloak Config: Get Route URL"
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: keycloak
+    namespace: keycloak
+  register: keycloak_route
+  when: keycloak_url is not defined
+
+- name: "Keycloak Config: Set URL fact"
+  ansible.builtin.set_fact:
+    keycloak_url: "https://{{ keycloak_route.resources[0].spec.host }}"
+  when: keycloak_url is not defined
+
+- name: "Keycloak Config: Get admin token"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/realms/master/protocol/openid-connect/token"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      grant_type: "password"
+      client_id: "admin-cli"
+      username: "{{ keycloak_admin_username }}"
+      password: "{{ keycloak_admin_password }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 200
+  register: token_response
+  retries: 5
+  delay: 10
+  until: token_response.status == 200
+
+- name: "Keycloak Config: Set access token fact"
+  ansible.builtin.set_fact:
+    keycloak_token: "{{ token_response.json.access_token }}"
+
+# -----------------------------------------------------------------------------
+# Create Realm
+# -----------------------------------------------------------------------------
+- name: "Keycloak Config: Check if realm exists"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: [200, 404]
+  register: realm_check
+
+- name: "Keycloak Config: Create AAP realm"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body: "{{ realm }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 201
+  when: realm_check.status == 404
+
+- name: "Keycloak Config: Update AAP realm"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body: "{{ realm }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 204
+  when: realm_check.status == 200
+
+# -----------------------------------------------------------------------------
+# Configure LDAP User Federation
+# -----------------------------------------------------------------------------
+- name: "Keycloak Config: Check if LDAP federation exists"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/components?name={{ ldap_federation.name }}&type=org.keycloak.storage.UserStorageProvider"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 200
+  register: ldap_check
+
+- name: "Keycloak Config: Set LDAP bind password in config"
+  ansible.builtin.set_fact:
+    ldap_federation_with_password: "{{ ldap_federation | combine({'config': ldap_federation.config | combine({'bindCredential': [ldap_bind_password]})}) }}"
+
+- name: "Keycloak Config: Create LDAP User Federation"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/components"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body: "{{ ldap_federation_with_password }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 201
+  register: ldap_create_response
+  when: ldap_check.json | length == 0
+
+- name: "Keycloak Config: Get LDAP federation ID"
+  ansible.builtin.set_fact:
+    ldap_federation_id: "{{ ldap_check.json[0].id if ldap_check.json | length > 0 else ldap_create_response.location | regex_replace('.*/([^/]+)$', '\\1') }}"
+
+# -----------------------------------------------------------------------------
+# Configure LDAP Group Mapper
+# -----------------------------------------------------------------------------
+- name: "Keycloak Config: Check if group mapper exists"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/components?parent={{ ldap_federation_id }}&name={{ group_mapper.name }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 200
+  register: group_mapper_check
+
+- name: "Keycloak Config: Create LDAP Group Mapper"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/components"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body: "{{ group_mapper | combine({'parentId': ldap_federation_id}) }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 201
+  when: group_mapper_check.json | length == 0
+
+# -----------------------------------------------------------------------------
+# Trigger LDAP Sync
+# -----------------------------------------------------------------------------
+- name: "Keycloak Config: Trigger full LDAP sync"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/user-storage/{{ ldap_federation_id }}/sync?action=triggerFullSync"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 200
+  register: sync_result
+
+- name: "Keycloak Config: Display sync result"
+  ansible.builtin.debug:
+    msg: "LDAP Sync: Added {{ sync_result.json.added }}, Updated {{ sync_result.json.updated }}, Removed {{ sync_result.json.removed }}, Failed {{ sync_result.json.failed }}"
+
+# -----------------------------------------------------------------------------
+# Create Realm Roles
+# -----------------------------------------------------------------------------
+- name: "Keycloak Config: Get existing realm roles"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/roles"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 200
+  register: existing_roles
+
+- name: "Keycloak Config: Create realm roles"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/roles"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body: "{{ item }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: [201, 409]
+  loop: "{{ realm_roles }}"
+  when: item.name not in (existing_roles.json | map(attribute='name') | list)
+
+# -----------------------------------------------------------------------------
+# Create SAML Client
+# -----------------------------------------------------------------------------
+- name: "Keycloak Config: Check if SAML client exists"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/clients?clientId={{ controller_hostname | urlencode }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 200
+  register: client_check
+
+- name: "Keycloak Config: Create SAML client"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/clients"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body: "{{ saml_client }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 201
+  register: client_create_response
+  when: client_check.json | length == 0
+
+- name: "Keycloak Config: Get SAML client ID"
+  ansible.builtin.set_fact:
+    saml_client_id: "{{ client_check.json[0].id if client_check.json | length > 0 else client_create_response.location | regex_replace('.*/([^/]+)$', '\\1') }}"
+
+- name: "Keycloak Config: Update SAML client"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/clients/{{ saml_client_id }}"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body: "{{ saml_client | combine({'id': saml_client_id}) }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 204
+  when: client_check.json | length > 0
+
+# -----------------------------------------------------------------------------
+# Add Protocol Mappers to SAML Client
+# -----------------------------------------------------------------------------
+- name: "Keycloak Config: Get existing protocol mappers"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/clients/{{ saml_client_id }}/protocol-mappers/models"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 200
+  register: existing_mappers
+
+- name: "Keycloak Config: Create protocol mappers"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/clients/{{ saml_client_id }}/protocol-mappers/models"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body: "{{ item }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: [201, 409]
+  loop: "{{ protocol_mappers }}"
+  when: item.name not in (existing_mappers.json | map(attribute='name') | list)
+
+# -----------------------------------------------------------------------------
+# Map Groups to Roles
+# -----------------------------------------------------------------------------
+- name: "Keycloak Config: Get realm groups"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/groups"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: 200
+  register: realm_groups
+
+- name: "Keycloak Config: Map LDAP groups to realm roles"
+  ansible.builtin.uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ realm.realm }}/groups/{{ (realm_groups.json | selectattr('name', 'equalto', item.group) | first).id }}/role-mappings/realm"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ keycloak_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      - name: "{{ item.role }}"
+    validate_certs: "{{ keycloak_validate_certs | default(false) }}"
+    status_code: [204, 409]
+  loop: "{{ group_role_mappings }}"
+  when: realm_groups.json | selectattr('name', 'equalto', item.group) | list | length > 0
+  ignore_errors: true
+
+- name: "Keycloak Config: Configuration complete"
+  ansible.builtin.debug:
+    msg:
+      - "Keycloak configuration complete"
+      - "Realm: {{ realm.realm }}"
+      - "LDAP Federation: {{ ldap_federation.name }}"
+      - "SAML Client: {{ controller_hostname }}"
+      - "SAML IdP Metadata: {{ keycloak_url }}/realms/{{ realm.realm }}/protocol/saml/descriptor"

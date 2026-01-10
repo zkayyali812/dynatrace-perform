@@ -1,0 +1,231 @@
+---
+# =============================================================================
+# Deploy Keycloak
+# =============================================================================
+# Tasks to deploy Keycloak identity provider on OpenShift
+# Guard variable: deploy_keycloak (default: true)
+# =============================================================================
+
+- name: "Keycloak: Create namespace"
+  kubernetes.core.k8s:
+    src: "{{ keycloak_manifests_path | default(playbook_dir + '/../../operators/keycloak') }}/namespace.yml"
+    state: present
+
+- name: "Keycloak: Apply OperatorGroup"
+  kubernetes.core.k8s:
+    src: "{{ keycloak_manifests_path | default(playbook_dir + '/../../operators/keycloak') }}/operator-group.yml"
+    state: present
+
+- name: "Keycloak: Apply Operator Subscription"
+  kubernetes.core.k8s:
+    src: "{{ keycloak_manifests_path | default(playbook_dir + '/../../operators/keycloak') }}/subscription.yml"
+    state: present
+
+- name: "Keycloak: Wait for Operator CSV to be ready"
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: ClusterServiceVersion
+    namespace: keycloak
+    label_selectors:
+      - "operators.coreos.com/keycloak-operator.keycloak="
+  register: keycloak_csv
+  until:
+    - keycloak_csv.resources | length > 0
+    - keycloak_csv.resources[0].status.phase is defined
+    - keycloak_csv.resources[0].status.phase == "Succeeded"
+  retries: 60
+  delay: 10
+
+- name: "Keycloak: Create database secret"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: keycloak-db-secret
+        namespace: keycloak
+      type: Opaque
+      stringData:
+        username: "{{ keycloak_db_username | default('keycloak') }}"
+        password: "{{ keycloak_db_password }}"
+
+- name: "Keycloak: Deploy PostgreSQL"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: postgres-db
+        namespace: keycloak
+        labels:
+          app: postgres-db
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: postgres-db
+        template:
+          metadata:
+            labels:
+              app: postgres-db
+          spec:
+            containers:
+              - name: postgres
+                image: quay.io/sclorg/postgresql-15-c9s:latest
+                ports:
+                  - containerPort: 5432
+                env:
+                  - name: POSTGRESQL_DATABASE
+                    value: keycloak
+                  - name: POSTGRESQL_USER
+                    valueFrom:
+                      secretKeyRef:
+                        name: keycloak-db-secret
+                        key: username
+                  - name: POSTGRESQL_PASSWORD
+                    valueFrom:
+                      secretKeyRef:
+                        name: keycloak-db-secret
+                        key: password
+                volumeMounts:
+                  - name: postgres-data
+                    mountPath: /var/lib/pgsql/data
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+            volumes:
+              - name: postgres-data
+                emptyDir: {}
+
+- name: "Keycloak: Create PostgreSQL service"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: postgres-db
+        namespace: keycloak
+      spec:
+        selector:
+          app: postgres-db
+        ports:
+          - port: 5432
+            targetPort: 5432
+
+- name: "Keycloak: Wait for PostgreSQL to be ready"
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: postgres-db
+    namespace: keycloak
+  register: postgres_deployment
+  until:
+    - postgres_deployment.resources | length > 0
+    - postgres_deployment.resources[0].status.readyReplicas is defined
+    - postgres_deployment.resources[0].status.readyReplicas == postgres_deployment.resources[0].spec.replicas
+  retries: 30
+  delay: 10
+
+- name: "Keycloak: Create instance"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: k8s.keycloak.org/v2alpha1
+      kind: Keycloak
+      metadata:
+        name: keycloak
+        namespace: keycloak
+      spec:
+        instances: 1
+        db:
+          vendor: postgres
+          host: postgres-db
+          usernameSecret:
+            name: keycloak-db-secret
+            key: username
+          passwordSecret:
+            name: keycloak-db-secret
+            key: password
+        http:
+          httpEnabled: true
+        hostname:
+          strict: false
+        proxy:
+          headers: xforwarded
+
+- name: "Keycloak: Create Route"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: route.openshift.io/v1
+      kind: Route
+      metadata:
+        name: keycloak
+        namespace: keycloak
+      spec:
+        to:
+          kind: Service
+          name: keycloak-service
+          weight: 100
+        port:
+          targetPort: http
+        tls:
+          termination: edge
+          insecureEdgeTerminationPolicy: Redirect
+        wildcardPolicy: None
+
+- name: "Keycloak: Wait for instance to be ready"
+  kubernetes.core.k8s_info:
+    api_version: k8s.keycloak.org/v2alpha1
+    kind: Keycloak
+    name: keycloak
+    namespace: keycloak
+  register: keycloak_cr
+  until:
+    - keycloak_cr.resources | length > 0
+    - keycloak_cr.resources[0].status is defined
+    - keycloak_cr.resources[0].status.conditions is defined
+    - keycloak_cr.resources[0].status.conditions | selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length > 0
+  retries: 60
+  delay: 10
+
+- name: "Keycloak: Get Route URL"
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: keycloak
+    namespace: keycloak
+  register: keycloak_route
+
+- name: "Keycloak: Set URL fact"
+  ansible.builtin.set_fact:
+    keycloak_url: "https://{{ keycloak_route.resources[0].spec.host }}"
+
+- name: "Keycloak: Get admin credentials from operator-managed secret"
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: keycloak-initial-admin
+    namespace: keycloak
+  register: keycloak_admin_secret
+
+- name: "Keycloak: Set admin credentials facts"
+  ansible.builtin.set_fact:
+    keycloak_admin_username: "{{ keycloak_admin_secret.resources[0].data.username | b64decode }}"
+    keycloak_admin_password: "{{ keycloak_admin_secret.resources[0].data.password | b64decode }}"
+
+- name: "Keycloak: Deployment complete"
+  ansible.builtin.debug:
+    msg:
+      - "Keycloak is ready"
+      - "URL: {{ keycloak_url }}"
+      - "Admin Console: {{ keycloak_url }}/admin"
+      - "Admin Username: {{ keycloak_admin_username }}"
+      - "Admin Password: (retrieved from secret)"
