@@ -51,6 +51,37 @@
       stringData:
         adminpassword: "{{ ldap_admin_password }}"
 
+- name: "OpenLDAP: Create LDAPS LoadBalancer service for external access"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: openldap-ldaps
+        namespace: openldap
+        annotations:
+          service.beta.openshift.io/serving-cert-secret-name: openldap-serving-cert
+      spec:
+        type: LoadBalancer
+        selector:
+          app: openldap
+        ports:
+          - name: ldaps
+            port: 636
+            targetPort: 636
+
+- name: "OpenLDAP: Wait for serving certificate to be generated"
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: openldap-serving-cert
+    namespace: openldap
+  register: serving_cert
+  until: serving_cert.resources | length > 0
+  retries: 30
+  delay: 5
+
 - name: "OpenLDAP: Generate users LDIF"
   ansible.builtin.set_fact:
     ldap_users_ldif: |
@@ -136,6 +167,22 @@
               app: openldap
           spec:
             serviceAccountName: openldap-sa
+            initContainers:
+              - name: copy-certs
+                image: registry.access.redhat.com/ubi8/ubi-minimal:latest
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    cp /certs-secret/tls.crt /certs/tls.crt
+                    cp /certs-secret/tls.key /certs/tls.key
+                    cp /certs-secret/tls.crt /certs/ca.crt
+                volumeMounts:
+                  - name: serving-cert-secret
+                    mountPath: /certs-secret
+                    readOnly: true
+                  - name: tls-certs
+                    mountPath: /certs
             containers:
               - name: openldap
                 image: docker.io/osixia/openldap:1.5.0
@@ -156,9 +203,21 @@
                         key: adminpassword
                   - name: LDAP_SEED_INTERNAL_LDIF_PATH
                     value: "/ldifs"
+                  - name: LDAP_TLS
+                    value: "true"
+                  - name: LDAP_TLS_CRT_FILENAME
+                    value: "tls.crt"
+                  - name: LDAP_TLS_KEY_FILENAME
+                    value: "tls.key"
+                  - name: LDAP_TLS_CA_CRT_FILENAME
+                    value: "ca.crt"
+                  - name: LDAP_TLS_VERIFY_CLIENT
+                    value: "never"
                 volumeMounts:
                   - name: ldif-data
                     mountPath: /ldifs
+                  - name: tls-certs
+                    mountPath: /container/service/slapd/assets/certs
                 resources:
                   requests:
                     cpu: 100m
@@ -170,8 +229,13 @@
               - name: ldif-data
                 configMap:
                   name: openldap-seed-data
+              - name: serving-cert-secret
+                secret:
+                  secretName: openldap-serving-cert
+              - name: tls-certs
+                emptyDir: {}
 
-- name: "OpenLDAP: Create service"
+- name: "OpenLDAP: Create internal service"
   kubernetes.core.k8s:
     state: present
     definition:
@@ -205,6 +269,30 @@
   retries: 30
   delay: 10
 
+- name: "OpenLDAP: Wait for LoadBalancer external IP"
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Service
+    name: openldap-ldaps
+    namespace: openldap
+  register: openldap_lb_svc
+  until:
+    - openldap_lb_svc.resources | length > 0
+    - openldap_lb_svc.resources[0].status.loadBalancer.ingress is defined
+    - openldap_lb_svc.resources[0].status.loadBalancer.ingress | length > 0
+  retries: 30
+  delay: 10
+
+- name: "OpenLDAP: Set external LDAP URL fact"
+  ansible.builtin.set_fact:
+    ldap_external_url: "ldaps://{{ openldap_lb_svc.resources[0].status.loadBalancer.ingress[0].hostname | default(openldap_lb_svc.resources[0].status.loadBalancer.ingress[0].ip) }}:636"
+  when:
+    - openldap_lb_svc.resources | length > 0
+    - openldap_lb_svc.resources[0].status.loadBalancer.ingress is defined
+
 - name: "OpenLDAP: Deployment complete"
   ansible.builtin.debug:
-    msg: "OpenLDAP is ready at ldap://openldap.openldap.svc.cluster.local:389"
+    msg:
+      - "OpenLDAP is ready"
+      - "Internal: ldap://openldap.openldap.svc.cluster.local:389"
+      - "External: {{ ldap_external_url | default('Not configured') }}"
