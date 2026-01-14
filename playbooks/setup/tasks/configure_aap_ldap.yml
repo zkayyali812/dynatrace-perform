@@ -9,6 +9,23 @@
 # Guard variable: configure_aap_ldap (default: false)
 # =============================================================================
 
+- name: "AAP LDAP: Get OpenLDAP LoadBalancer Service"
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Service
+    name: openldap-ldaps
+    namespace: openldap
+  register: openldap_lb_svc
+  when: ldap_external_url is not defined
+
+- name: "AAP LDAP: Set external LDAP URL fact"
+  ansible.builtin.set_fact:
+    ldap_external_url: "ldaps://{{ openldap_lb_svc.resources[0].status.loadBalancer.ingress[0].hostname | default(openldap_lb_svc.resources[0].status.loadBalancer.ingress[0].ip) }}:636"
+  when:
+    - ldap_external_url is not defined
+    - openldap_lb_svc.resources | length > 0
+    - openldap_lb_svc.resources[0].status.loadBalancer.ingress is defined
+
 - name: "AAP LDAP: Create LDAP authenticator"
   ansible.platform.authenticator:
     gateway_hostname: "{{ gateway_hostname }}"
@@ -23,10 +40,13 @@
     type: "ansible_base.authentication.authenticator_plugins.ldap"
     configuration:
       SERVER_URI:
-        - "ldap://openldap.openldap.svc.cluster.local:389"
+        - "{{ ldap_external_url }}"
       BIND_DN: "cn=admin,dc=example,dc=com"
       BIND_PASSWORD: "{{ ldap_admin_password }}"
       START_TLS: false
+      CONNECTION_OPTIONS:
+        OPT_X_TLS_REQUIRE_CERT: 0
+        OPT_X_TLS_NEWCTX: 0
       USER_SEARCH:
         - "ou=users,dc=example,dc=com"
         - "SCOPE_SUBTREE"
@@ -161,7 +181,7 @@
     msg:
       - "AAP LDAP configuration complete"
       - "LDAP Authenticator: OpenLDAP"
-      - "LDAP Server: ldap://openldap.openldap.svc.cluster.local:389"
+      - "LDAP Server: {{ ldap_external_url }}"
       - ""
       - "Demo Users (authenticate with LDAP password):"
       - "  - alice (aap-admins)"

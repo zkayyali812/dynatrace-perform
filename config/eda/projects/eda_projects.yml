@@ -5,5 +5,4 @@ eda_projects:
     description: "EDA Rulebooks for Dynatrace problem event handling"
     url: "{{ project_scm_url }}"
     scm_branch: "{{ project_scm_branch }}"
-    credential: "GitHub PAT"
     organization: "{{ organization_name }}"

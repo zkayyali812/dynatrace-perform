@@ -10,4 +10,3 @@ controller_projects:
     scm_clean: true
     scm_delete_on_update: false
     scm_update_on_launch: true
-    credential: "GitHub PAT"
