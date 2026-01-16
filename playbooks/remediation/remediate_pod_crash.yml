@@ -15,7 +15,7 @@
     _problem_id: "{{ problem_id | default('unknown') }}"
     _affected_entity: "{{ affected_entity | default('unknown') }}"
     _namespace: "{{ namespace | default('demo-app') }}"
-
+    close_result: true
   tasks:
     - name: Log remediation start
       ansible.builtin.debug:
