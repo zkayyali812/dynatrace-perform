@@ -80,7 +80,7 @@
             extra_vars:
               problem_id: "{{ event.payload.eventData.problemId }}"
               problem_title: "{{ event.payload.eventData.problemTitle }}"
-              affected_entity: "{{ event.payload.eventData.impactedEntitiesId[0].name | default('unknown') }}"
+              affected_entity: "demo-app"
               namespace: "demo-app"
             labels:
               - 1
