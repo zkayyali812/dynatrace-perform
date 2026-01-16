@@ -1,0 +1,107 @@
+---
+# =============================================================================
+# Create Test Problem in Dynatrace
+# =============================================================================
+# Injects a test event via Dynatrace Events API that Davis will correlate
+# into a problem. This problem will trigger the Davis problem workflow.
+# =============================================================================
+
+- name: Create Test Problem in Dynatrace
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    _dynatrace_url: "{{ dynatrace_environment_url }}"
+    _dynatrace_token: "{{ dynatrace_api_token }}"
+    _problem_type: "{{ problem_type | default('pod_crash') }}"
+    _timeout_minutes: "{{ timeout_minutes | default(5) }}"
+    _target_entity: "{{ target_entity | default('demo-app') }}"
+    _namespace: "{{ namespace | default('demo-app') }}"
+
+  tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - _dynatrace_url is defined and _dynatrace_url != ''
+          - _dynatrace_token is defined and _dynatrace_token != ''
+        fail_msg: "dynatrace_environment_url and dynatrace_api_token must be defined"
+
+    - name: Set problem parameters based on type
+      ansible.builtin.set_fact:
+        problem_config: "{{ problem_types[_problem_type] }}"
+      vars:
+        problem_types:
+          pod_crash:
+            event_type: "AVAILABILITY_EVENT"
+            title: "Backoff event"
+            description: "Pod crash detected - CrashLoopBackOff on {{ _target_entity }}"
+          high_cpu:
+            event_type: "RESOURCE_CONTENTION_EVENT"
+            title: "High CPU saturation detected on {{ _target_entity }}"
+            description: "CPU usage exceeded threshold on {{ _target_entity }}"
+          memory:
+            event_type: "RESOURCE_CONTENTION_EVENT"
+            title: "Memory exhaustion detected - OOM risk on {{ _target_entity }}"
+            description: "Memory usage critical on {{ _target_entity }}"
+          custom:
+            event_type: "{{ custom_event_type | default('AVAILABILITY_EVENT') }}"
+            title: "{{ custom_title | default('Custom test problem') }}"
+            description: "{{ custom_description | default('Custom test problem for demo') }}"
+
+    - name: Display problem to be created
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          CREATING TEST PROBLEM IN DYNATRACE
+          ============================================
+          Type: {{ _problem_type }}
+          Event Type: {{ problem_config.event_type }}
+          Title: {{ problem_config.title }}
+          Target Entity: {{ _target_entity }}
+          Namespace: {{ _namespace }}
+          Timeout: {{ _timeout_minutes }} minutes
+          ============================================
+
+    - name: Inject test event into Dynatrace
+      ansible.builtin.uri:
+        url: "{{ _dynatrace_url }}/api/v2/events/ingest"
+        method: POST
+        headers:
+          Authorization: "Api-Token {{ _dynatrace_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          eventType: "{{ problem_config.event_type }}"
+          title: "{{ problem_config.title }}"
+          timeout: "{{ _timeout_minutes | int }}"
+          entitySelector: "type(CLOUD_APPLICATION),entityName.equals({{ _target_entity }})"
+          properties:
+            app: "{{ _target_entity }}"
+            env: "production"
+            team: "platform"
+            k8s.workload.name: "{{ _target_entity }}"
+            k8s.namespace.name: "{{ _namespace }}"
+            source: "ansible-test"
+        status_code: [200, 201, 202]
+        validate_certs: false
+      register: event_result
+
+    - name: Display result
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          TEST PROBLEM CREATED SUCCESSFULLY
+          ============================================
+          Response: {{ event_result.json | default('No JSON response') }}
+
+          The problem should appear in Dynatrace within 1-2 minutes.
+          It will auto-close after {{ _timeout_minutes }} minutes if not
+          closed by remediation.
+
+          Monitor:
+          - Dynatrace Problems view
+          - Dynatrace Workflow Executions
+          - EDA Controller Rule Audit
+          - AAP Job History
+          ============================================

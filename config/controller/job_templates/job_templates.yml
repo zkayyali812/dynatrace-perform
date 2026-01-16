@@ -90,6 +90,24 @@ controller_templates:
       dynatrace_api_token: "{{ dynatrace_api_token }}"
 
   # ---------------------------------------------------------------------------
+  # Create Dynatrace Problem
+  # ---------------------------------------------------------------------------
+  - name: "Create Dynatrace Problem"
+    description: "Inject a problem into Dynatrace to trigger the workflow"
+    organization: "{{ organization_name }}"
+    project: "{{ project_name }}"
+    playbook: "playbooks/utilities/create_test_problem.yml"
+    inventory: "Localhost"
+    ask_variables_on_launch: true
+    extra_vars:
+      problem_type: "pod_crash"
+      timeout_minutes: 5
+      target_entity: "demo-app"
+      namespace: "{{ target_namespace }}"
+      dynatrace_environment_url: "{{ dynatrace_environment_url }}"
+      dynatrace_api_token: "{{ dynatrace_api_token }}"
+
+  # ---------------------------------------------------------------------------
   # Reset Demo Environment
   # ---------------------------------------------------------------------------
   - name: "Reset Demo Environment"
