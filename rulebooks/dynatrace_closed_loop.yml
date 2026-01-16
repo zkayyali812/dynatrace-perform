@@ -25,19 +25,18 @@
     # -------------------------------------------------------------------------
     - name: Remediate High CPU (Closed-Loop)
       condition: >-
-        event.payload.ProblemTitle is search("CPU", ignorecase=true) or
-        event.payload.ProblemTitle is search("saturation", ignorecase=true)
+        event.payload.eventData.problemTitle is search("CPU", ignorecase=true) or
+        event.payload.eventData.problemTitle is search("saturation", ignorecase=true)
       action:
         run_job_template:
           name: "Remediate High CPU"
           organization: "Dynatrace Demo"
           job_args:
             extra_vars:
-              problem_id: "{{ event.payload.ProblemID }}"
-              problem_title: "{{ event.payload.ProblemTitle }}"
-              affected_entity: "{{ event.payload.ImpactedEntity | default('unknown') }}"
-              problem_url: "{{ event.payload.ProblemURL | default('') }}"
-              problem_severity: "{{ event.payload.ProblemSeverity | default('') }}"
+              problem_id: "{{ event.payload.eventData.problemId }}"
+              problem_title: "{{ event.payload.eventData.problemTitle }}"
+              affected_entity: "{{ event.payload.eventData.impactedEntitiesId[0].name | default('unknown') }}"
+              problem_level: "{{ event.payload.eventData.problemLevel | default('') }}"
               namespace: "demo-app"
               close_problem: true
             labels:
@@ -50,17 +49,17 @@
     # -------------------------------------------------------------------------
     - name: Remediate Memory Exhaustion (Closed-Loop)
       condition: >-
-        event.payload.ProblemTitle is search("memory", ignorecase=true) or
-        event.payload.ProblemTitle is search("OOM", ignorecase=true)
+        event.payload.eventData.problemTitle is search("memory", ignorecase=true) or
+        event.payload.eventData.problemTitle is search("OOM", ignorecase=true)
       action:
         run_job_template:
           name: "Remediate Memory Exhaustion"
           organization: "Dynatrace Demo"
           job_args:
             extra_vars:
-              problem_id: "{{ event.payload.ProblemID }}"
-              problem_title: "{{ event.payload.ProblemTitle }}"
-              affected_entity: "{{ event.payload.ImpactedEntity | default('unknown') }}"
+              problem_id: "{{ event.payload.eventData.problemId }}"
+              problem_title: "{{ event.payload.eventData.problemTitle }}"
+              affected_entity: "{{ event.payload.eventData.impactedEntitiesId[0].name | default('unknown') }}"
               namespace: "demo-app"
               scale_replicas: 3
               close_problem: true
@@ -70,22 +69,23 @@
               - 3
 
     # -------------------------------------------------------------------------
-    # Pod Crash Problem - Closed-Loop
+    # Pod Crash / Backoff Problem - Closed-Loop
     # -------------------------------------------------------------------------
     - name: Remediate Pod Crash (Closed-Loop)
       condition: >-
-        event.payload.ProblemTitle is search("crash", ignorecase=true) or
-        event.payload.ProblemTitle is search("CrashLoop", ignorecase=true) or
-        event.payload.ProblemTitle is search("restart", ignorecase=true)
+        event.payload.eventData.problemTitle is search("crash", ignorecase=true) or
+        event.payload.eventData.problemTitle is search("CrashLoop", ignorecase=true) or
+        event.payload.eventData.problemTitle is search("Backoff", ignorecase=true) or
+        event.payload.eventData.problemTitle is search("restart", ignorecase=true)
       action:
         run_job_template:
           name: "Remediate Pod Crash"
           organization: "Dynatrace Demo"
           job_args:
             extra_vars:
-              problem_id: "{{ event.payload.ProblemID }}"
-              problem_title: "{{ event.payload.ProblemTitle }}"
-              affected_entity: "{{ event.payload.ImpactedEntity | default('unknown') }}"
+              problem_id: "{{ event.payload.eventData.problemId }}"
+              problem_title: "{{ event.payload.eventData.problemTitle }}"
+              affected_entity: "{{ event.payload.eventData.impactedEntitiesId[0].name | default('unknown') }}"
               namespace: "demo-app"
               close_problem: true
             labels:
@@ -98,8 +98,8 @@
     # -------------------------------------------------------------------------
     - name: Problem Resolved
       condition: >-
-        event.payload.ProblemID is defined and
-        event.payload.State == "RESOLVED"
+        event.payload.eventData.problemId is defined and
+        event.payload.eventData.problemStatus == "RESOLVED"
       action:
         debug:
-          msg: "Problem {{ event.payload.ProblemID }} has been resolved in Dynatrace"
+          msg: "Problem {{ event.payload.eventData.problemId }} has been resolved in Dynatrace"
