@@ -13,9 +13,9 @@
 
   vars:
     _problem_id: "{{ problem_id | default('unknown') }}"
+    _problem_display_id: "{{ problem_display_id | default(_problem_id) }}"
     _affected_entity: "{{ affected_entity | default('unknown') }}"
     _namespace: "{{ namespace | default('demo-app') }}"
-    close_result: true
   tasks:
     - name: Log remediation start
       ansible.builtin.debug:
@@ -23,7 +23,7 @@
           ============================================
           POD CRASH REMEDIATION STARTED
           ============================================
-          Problem ID: {{ _problem_id }}
+          Problem ID: {{ _problem_display_id }}
           Problem Title: {{ problem_title | default('Pod Crash') }}
           Affected Entity: {{ _affected_entity }}
           Namespace: {{ _namespace }}
@@ -118,7 +118,7 @@
           ============================================
           POD CRASH REMEDIATION COMPLETED
           ============================================
-          Problem ID: {{ _problem_id }}
+          Problem ID: {{ _problem_display_id }}
           Deployment: {{ deployment_name }}
           Crashed Pods Deleted: {{ crashed_pods | length }}
           Pods Now Running: {{ pods_after.resources | selectattr('status.phase', 'equalto', 'Running') | list | length }}
@@ -128,7 +128,7 @@
       ansible.builtin.set_stats:
         data:
           remediation_status: "success"
-          problem_id: "{{ _problem_id }}"
+          problem_id: "{{ _problem_display_id }}"
           crashed_pods_deleted: "{{ crashed_pods | length }}"
 
     # -------------------------------------------------------------------------
@@ -164,7 +164,7 @@
 
     - name: Log Dynatrace comment status
       ansible.builtin.debug:
-        msg: "Added remediation comment to Dynatrace problem {{ _problem_id }}"
+        msg: "Added remediation comment to Dynatrace problem {{ _problem_display_id }}"
       when: close_problem | default(false) | bool
 
     # -------------------------------------------------------------------------
@@ -192,5 +192,5 @@
 
     - name: Log problem close status
       ansible.builtin.debug:
-        msg: "Problem {{ _problem_id }} close request sent. Status: {{ close_result.status | default('unknown') }}"
+        msg: "Problem {{ _problem_display_id }} close request sent. Status: {{ close_result.status | default('unknown') }}"
       when: close_problem | default(false) | bool

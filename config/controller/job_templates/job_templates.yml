@@ -55,6 +55,9 @@ controller_templates:
       problem_id: ""
       affected_entity: ""
       namespace: "{{ target_namespace }}"
+      close_problem: true
+      dynatrace_environment_url: "{{ dynatrace_environment_url }}"
+      dynatrace_api_token: "{{ dynatrace_api_token }}"
 
   # ---------------------------------------------------------------------------
   # Create Dynatrace Problem

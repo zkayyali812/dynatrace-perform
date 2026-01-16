@@ -78,7 +78,8 @@
           organization: "Dynatrace Demo"
           job_args:
             extra_vars:
-              problem_id: "{{ event.payload.eventData.problemId }}"
+              problem_id: "{{ event.payload.eventData.eventId }}"
+              problem_display_id: "{{ event.payload.eventData.problemId }}"
               problem_title: "{{ event.payload.eventData.problemTitle }}"
               affected_entity: "demo-app"
               namespace: "demo-app"
