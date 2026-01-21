@@ -16,6 +16,7 @@
     _problem_display_id: "{{ problem_display_id | default(_problem_id) }}"
     _affected_entity: "{{ affected_entity | default('unknown') }}"
     _namespace: "{{ namespace | default('demo-app') }}"
+    _close_problem_delay: "{{ close_problem_delay | default(30) }}"
   tasks:
     - name: Log remediation start
       ansible.builtin.debug:
@@ -170,6 +171,13 @@
     # -------------------------------------------------------------------------
     # Close Problem in Dynatrace via API
     # -------------------------------------------------------------------------
+    - name: Wait before closing problem
+      ansible.builtin.pause:
+        seconds: "{{ _close_problem_delay | int }}"
+      when:
+        - close_problem | default(false) | bool
+        - _close_problem_delay | int > 0
+
     - name: Close problem in Dynatrace
       ansible.builtin.uri:
         url: "{{ dynatrace_environment_url }}/api/v2/problems/{{ _problem_id }}/close"
