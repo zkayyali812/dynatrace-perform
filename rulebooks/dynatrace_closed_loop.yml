@@ -40,9 +40,10 @@
               namespace: "demo-app"
               close_problem: true
             labels:
-              - 1
-              - 2
-              - 3
+              - "{{ user_label | default('EDA Remediation') }}"
+              - "Dynatrace"
+              - "High CPU"
+              - "Closed-Loop"
 
     # -------------------------------------------------------------------------
     # Memory Exhaustion Problem - Closed-Loop
@@ -64,9 +65,10 @@
               scale_replicas: 3
               close_problem: true
             labels:
-              - 1
-              - 2
-              - 3
+              - "{{ user_label | default('EDA Remediation') }}"
+              - "Dynatrace"
+              - "Memory Exhaustion"
+              - "Closed-Loop"
 
     # -------------------------------------------------------------------------
     # Pod Crash / Backoff Problem - Closed-Loop
@@ -90,9 +92,10 @@
               namespace: "demo-app"
               close_problem: true
             labels:
-              - 1
-              - 2
-              - 3
+              - "{{ user_label | default('EDA Remediation') }}"
+              - "Dynatrace"
+              - "Pod Crash"
+              - "Closed-Loop"
 
     # -------------------------------------------------------------------------
     # Problem Resolved - Log only

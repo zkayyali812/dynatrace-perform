@@ -36,9 +36,9 @@
               problem_level: "{{ event.payload.eventData.problemLevel | default('') }}"
               namespace: "demo-app"
             labels:
-              - 1
-              - 2
-              - 3
+              - "{{ user_label | default('EDA Remediation') }}"
+              - "Dynatrace"
+              - "High CPU"
 
     # -------------------------------------------------------------------------
     # Memory Exhaustion Problem
@@ -59,9 +59,9 @@
               namespace: "demo-app"
               scale_replicas: 3
             labels:
-              - 1
-              - 2
-              - 3
+              - "{{ user_label | default('EDA Remediation') }}"
+              - "Dynatrace"
+              - "Memory Exhaustion"
 
     # -------------------------------------------------------------------------
     # Pod Crash / Backoff Problem
@@ -84,9 +84,9 @@
               affected_entity: "demo-app"
               namespace: "demo-app"
             labels:
-              - 1
-              - 2
-              - 3
+              - "{{ user_label | default('EDA Remediation') }}"
+              - "Dynatrace"
+              - "Pod Crash"
 
     # -------------------------------------------------------------------------
     # Default Handler - Log and Acknowledge
@@ -105,8 +105,9 @@
               problem_title: "{{ event.payload.eventData.problemTitle }}"
               problem_details: "{{ event | to_json }}"
             labels:
-              - 1
-              - 3
+              - "{{ user_label | default('EDA Remediation') }}"
+              - "Dynatrace"
+              - "Unknown Problem"
 
     # -------------------------------------------------------------------------
     # Problem Resolved - Close Tracking
