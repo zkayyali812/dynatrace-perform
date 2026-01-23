@@ -35,10 +35,10 @@
               affected_entity: "{{ event.payload.eventData.impactedEntitiesId[0].name | default('unknown') }}"
               problem_level: "{{ event.payload.eventData.problemLevel | default('') }}"
               namespace: "demo-app"
-            labels:
-              - "{{ user_label | default('EDA Remediation') }}"
-              - "Dynatrace"
-              - "High CPU"
+          labels:
+            - "{{ user_label | default('EDA Remediation') }}"
+            - "Dynatrace"
+            - "High CPU"
 
     # -------------------------------------------------------------------------
     # Memory Exhaustion Problem
@@ -58,10 +58,10 @@
               affected_entity: "{{ event.payload.eventData.impactedEntitiesId[0].name | default('unknown') }}"
               namespace: "demo-app"
               scale_replicas: 3
-            labels:
-              - "{{ user_label | default('EDA Remediation') }}"
-              - "Dynatrace"
-              - "Memory Exhaustion"
+          labels:
+            - "{{ user_label | default('EDA Remediation') }}"
+            - "Dynatrace"
+            - "Memory Exhaustion"
 
     # -------------------------------------------------------------------------
     # Pod Crash / Backoff Problem
@@ -83,10 +83,10 @@
               problem_title: "{{ event.payload.eventData.problemTitle }}"
               affected_entity: "demo-app"
               namespace: "demo-app"
-            labels:
-              - "{{ user_label | default('EDA Remediation') }}"
-              - "Dynatrace"
-              - "Pod Crash"
+          labels:
+            - "{{ user_label | default('EDA Remediation') }}"
+            - "Dynatrace"
+            - "Pod Crash"
 
     # -------------------------------------------------------------------------
     # Default Handler - Log and Acknowledge
@@ -104,10 +104,10 @@
               problem_id: "{{ event.payload.eventData.problemId }}"
               problem_title: "{{ event.payload.eventData.problemTitle }}"
               problem_details: "{{ event | to_json }}"
-            labels:
-              - "{{ user_label | default('EDA Remediation') }}"
-              - "Dynatrace"
-              - "Unknown Problem"
+          labels:
+            - "{{ user_label | default('EDA Remediation') }}"
+            - "Dynatrace"
+            - "Unknown Problem"
 
     # -------------------------------------------------------------------------
     # Problem Resolved - Close Tracking
